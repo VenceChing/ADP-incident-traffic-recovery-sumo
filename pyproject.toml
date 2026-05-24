@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "its-signal-control"
+version = "0.1.0"
+description = "Incident-aware decentralized ADP traffic signal control experiments for SUMO."
+requires-python = ">=3.10"
+dependencies = [
+  "traci>=1.20.0",
+  "sumolib>=1.20.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+its-signal-control = "its_signal_control.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

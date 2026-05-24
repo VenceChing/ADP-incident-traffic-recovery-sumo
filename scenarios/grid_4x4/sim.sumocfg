@@ -1,0 +1,13 @@
+<configuration>
+    <input>
+        <net-file value="grid_4x4.net.xml"/>
+        <route-files value="grid_4x4_rate2500.rou.xml"/>
+    </input>
+    <time>
+        <begin value="0"/>
+    </time>
+    
+    <gui_only>
+        <gui-settings-file value="view.xml"/>
+    </gui_only>
+</configuration>
