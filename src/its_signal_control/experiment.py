@@ -52,6 +52,8 @@ from .traffic_model import (
 from .utils import generate_routes
 from .utils import cleanup_route_temp_files
 
+from .analysis import StepLogWriter
+from pathlib import Path
 
 def select_round_robin_action(sim_time: float) -> int:
     return int(sim_time // DECISION_INTERVAL) % 4
@@ -117,6 +119,15 @@ def run_episode(
 
     python_current_phases = {agent_id: 0 for agent_id in agents.keys()}
     episode_start_l1_norms = get_agent_weight_l1_norms(agents)
+    
+    metrics_dir = Path(metrics_path).parent
+    current_run_id = metrics_dir.name
+    current_outputs_root = metrics_dir.parent.parent
+    log_writer = StepLogWriter(output_root=current_outputs_root, run_id=current_run_id)
+    custom_filename = f"{phase}_{controller}_ep{episode}.csv"
+    log_writer.path = log_writer.path.parent / custom_filename
+    log_writer._needs_header = not log_writer.path.exists() or log_writer.path.stat().st_size == 0
+    
     fixed_rr_control = controller in {"fixed_time", "fixed_time_rr"}
     adp_control = controller in {"adp_train", "adp_eval"}
     epsilon = get_train_epsilon(episode) if train_adp else 0.0
@@ -354,6 +365,30 @@ def run_episode(
                 is_gridlock=False,
                 context=context,
             )
+            
+        for agent_id, agent in agents.items():
+            controlled_lanes = traci.trafficlight.getControlledLanes(agent_id)
+            agent_edges = list(set([lane.rsplit('_', 1)[0] for lane in controlled_lanes if not lane.startswith(":")]))
+            
+            agent_queue = sum(current_queues_all.get(edge, 0.0) for edge in agent_edges)
+            
+            valid_speeds = [traci.edge.getLastStepMeanSpeed(edge) for edge in agent_edges if traci.edge.getLastStepMeanSpeed(edge) >= 0]
+            agent_speed = sum(valid_speeds) / len(valid_speeds) if valid_speeds else 0.0
+
+            log_writer.append({
+                "run_id": f"{phase}_{controller}",
+                "phase": phase,
+                "controller": controller,
+                "episode": episode,
+                "seed": seed,
+                "time": sim_time,
+                "agent_id": agent_id,
+                "current_phase": python_current_phases[agent_id],
+                "action": target_actions.get(agent_id, -1),
+                "reward": None, 
+                "total_queue": agent_queue,
+                "mean_speed": agent_speed,
+            })
 
     episode_end_l1_norms = get_agent_weight_l1_norms(agents)
     total_l1_delta = sum(
