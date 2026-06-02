@@ -1,0 +1,158 @@
+{
+  "timestamp": "2026-06-02T23:20:53.160025",
+  "training_config": {
+    "episodes_per_strategy": 10,
+    "feature_dimension_no_neighbor": 30,
+    "feature_dimension_with_neighbor": 66
+  },
+  "strategies": {
+    "checkerboard": {
+      "strategy": "checkerboard",
+      "description": "棋盤式：對角線不相鄰，最小衝突",
+      "feature_dimension": 30,
+      "allow_neighbor_info": true,
+      "training_episodes": 10,
+      "total_elapsed_seconds": 279.743376,
+      "success_count": 8,
+      "success_rate": 0.8,
+      "gridlock_count": 0,
+      "gridlock_rate": 0.0,
+      "training_details": [
+        {
+          "episode": 0,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 1,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 2,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 3,
+          "status": "TIMEOUT",
+          "success": false,
+          "gridlock": false
+        },
+        {
+          "episode": 4,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 5,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 6,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 7,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 8,
+          "status": "TIMEOUT",
+          "success": false,
+          "gridlock": false
+        },
+        {
+          "episode": 9,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        }
+      ]
+    },
+    "ring": {
+      "strategy": "ring",
+      "description": "環形：外向內螺旋排列",
+      "feature_dimension": 30,
+      "allow_neighbor_info": true,
+      "training_episodes": 10,
+      "total_elapsed_seconds": 295.694091,
+      "success_count": 7,
+      "success_rate": 0.7,
+      "gridlock_count": 2,
+      "gridlock_rate": 0.2,
+      "training_details": [
+        {
+          "episode": 0,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 1,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 2,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 3,
+          "status": "GRIDLOCK",
+          "success": false,
+          "gridlock": true
+        },
+        {
+          "episode": 4,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 5,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 6,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 7,
+          "status": "TIMEOUT",
+          "success": false,
+          "gridlock": false
+        },
+        {
+          "episode": 8,
+          "status": "GRIDLOCK",
+          "success": false,
+          "gridlock": true
+        },
+        {
+          "episode": 9,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        }
+      ]
+    }
+  }
+}

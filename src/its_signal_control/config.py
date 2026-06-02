@@ -99,6 +99,12 @@ ALL_RED_SECONDS = 1
 TRACE_ACTIONS = False
 TRACE_ACTION_INTERVALS = 12
 
+# === 新增：決策順序與鄰近路口特徵配置 ===
+DECISION_ORDER_STRATEGY = "unified"  # 選項："unified", "distance_decay", "checkerboard", "ring", "greedy_dynamic", "random"
+ALLOW_NEIGHBOR_INFO = False  # 是否讓路口獲知鄰近路口的決策
+PREVENT_CONSECUTIVE_DECISION = True  # 防止同一路口連續決策
+DECISION_ORDER_RANDOM_SEED = 42
+
 RESULTS_DIR = "results"
 LEGACY_WEIGHTS_PATH = "agent_weights.json"
 WEIGHTS_PATH = os.path.join(RESULTS_DIR, "adp_agent_weights.json")

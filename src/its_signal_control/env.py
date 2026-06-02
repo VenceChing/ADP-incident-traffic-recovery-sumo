@@ -9,6 +9,7 @@ if "SUMO_HOME" in os.environ:
 else:
     raise EnvironmentError("SUMO_HOME is not set.")
 
+import sumolib
 import traci
 
 from .config import REROUTING_PERIOD, REROUTING_PROBABILITY, SUMO_CONFIG
@@ -21,12 +22,37 @@ class SumoEnv:
         self.incident_triggered = False
         self._stress_alpha = {}
 
+        # --- 修正後的動態路徑代碼 ---
+        # 1. 取得當前 env.py 的絕對路徑
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 2. 修改這裡：只要往上推兩層 ".."，就能正確抵達專案根目錄
+        # 這樣路徑就會包含 ADP-incident-traffic-recovery-sumo 這一層
+        project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+
+        # 3. 匯入配置
+        from .config import SCENARIO_DIR, NETWORK_FILE
+        
+        # 4. 拼接出完美的絕對路徑
+        net_abs_path = os.path.join(project_root, SCENARIO_DIR, NETWORK_FILE)
+        
+        # 5. 讀取路網
+        import sumolib
+        self.net = sumolib.net.readNet(net_abs_path)
+
     def start_simulation(self, end_time: Optional[float] = None) -> None:
         sumo_binary = "sumo-gui" if self.use_gui else "sumo"
+        
+        # 這裡也同步改為往上兩層
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+        
+        from .config import SCENARIO_DIR, SUMO_CONFIG
+        sumo_config_abs_path = os.path.join(project_root, SCENARIO_DIR, SUMO_CONFIG)
+
         sumo_cmd = [
             sumo_binary,
-            "-c",
-            SUMO_CONFIG,
+            "-c", sumo_config_abs_path,
             "--step-length", str(self.step_length),
             "--device.rerouting.probability", str(REROUTING_PROBABILITY),
             "--device.rerouting.period", str(REROUTING_PERIOD),

@@ -1,0 +1,96 @@
+{
+  "timestamp": "2026-06-02T22:52:19.683735",
+  "training_config": {
+    "episodes_per_strategy": 10,
+    "feature_dimension_no_neighbor": 30,
+    "feature_dimension_with_neighbor": 66
+  },
+  "strategies": {
+    "unified": {
+      "strategy": "unified",
+      "description": "同時決策，無鄰近資訊（基準對照）",
+      "feature_dimension": 30,
+      "allow_neighbor_info": false,
+      "training_episodes": 10,
+      "total_elapsed_seconds": 206.029035,
+      "success_count": 6,
+      "success_rate": 0.6,
+      "gridlock_count": 4,
+      "gridlock_rate": 0.4
+    },
+    "distance_decay": {
+      "strategy": "distance_decay",
+      "description": "距離遞減：距離事故最遠優先決策",
+      "feature_dimension": 30,
+      "allow_neighbor_info": true,
+      "training_episodes": 10,
+      "total_elapsed_seconds": 221.738128,
+      "success_count": 7,
+      "success_rate": 0.7,
+      "gridlock_count": 3,
+      "gridlock_rate": 0.3,
+      "training_details": [
+        {
+          "episode": 0,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 1,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 2,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 3,
+          "status": "GRIDLOCK",
+          "success": false,
+          "gridlock": true
+        },
+        {
+          "episode": 4,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 5,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 6,
+          "status": "GRIDLOCK",
+          "success": false,
+          "gridlock": true
+        },
+        {
+          "episode": 7,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        },
+        {
+          "episode": 8,
+          "status": "GRIDLOCK",
+          "success": false,
+          "gridlock": true
+        },
+        {
+          "episode": 9,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        }
+      ]
+    }
+  }
+}

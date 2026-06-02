@@ -1,0 +1,12 @@
+{
+  "strategy": "unified",
+  "description": "同時決策，無鄰近資訊（基準對照）",
+  "feature_dimension": 30,
+  "allow_neighbor_info": false,
+  "training_episodes": 10,
+  "total_elapsed_seconds": 272.059949,
+  "success_count": 4,
+  "success_rate": 0.4,
+  "gridlock_count": 6,
+  "gridlock_rate": 0.6
+}

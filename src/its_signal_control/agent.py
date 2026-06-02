@@ -168,6 +168,9 @@ class ADPAgent:
         action_pressures: list[float] | None = None,
         downstream_queues: list[float] | None = None,
         downstream_capacities: list[float] | None = None,
+        neighbor_actions: dict[str, int] | None = None,
+        neighbor_phases: dict[str, int] | None = None,
+        neighbor_queues: dict[str, float] | None = None,
     ) -> list[float]:
         queue_features = [
             self._normalized_queue(current_queues.get(edge_id, 0.0))
@@ -249,13 +252,71 @@ class ADPAgent:
             self._clip_feature(aligned_with_incident * dist_feature, lower=0.0),
         ]
 
+        # 鄰近路口特徵（可選）
+        neighbor_features = self._extract_neighbor_features(neighbor_actions, neighbor_phases, neighbor_queues)
+
         return (
             queue_features
             + phase_features
             + incident_direction_features
             + action_features
             + global_features
+            + neighbor_features
         )
+
+    def _extract_neighbor_features(
+        self,
+        neighbor_actions: dict[str, int] | None = None,
+        neighbor_phases: dict[str, int] | None = None,
+        neighbor_queues: dict[str, float] | None = None,
+    ) -> list[float]:
+        """提取鄰近路口特徵（one-hot 編碼動作和相位 + 歸一化隊列）"""
+        neighbor_actions = neighbor_actions or {}
+        neighbor_phases = neighbor_phases or {}
+        neighbor_queues = neighbor_queues or {}
+
+        features = []
+
+        # 最多 4 個鄰近路口（4-連通）
+        max_neighbors = 4
+        for _ in range(max_neighbors):
+            # 動作特徵（one-hot）
+            for _ in range(self.num_phases):
+                features.append(0.0)
+
+        for _ in range(max_neighbors):
+            # 相位特徵（one-hot）
+            for _ in range(self.num_phases):
+                features.append(0.0)
+
+        for _ in range(max_neighbors):
+            # 隊列特徵
+            features.append(0.0)
+
+        if not neighbor_actions and not neighbor_phases and not neighbor_queues:
+            return features
+
+        # 填充實際鄰近資料
+        for idx, (nid, action) in enumerate(neighbor_actions.items()):
+            if idx >= max_neighbors:
+                break
+            if 0 <= action < self.num_phases:
+                features[idx * self.num_phases + action] = 1.0
+
+        for idx, (nid, phase) in enumerate(neighbor_phases.items()):
+            if idx >= max_neighbors:
+                break
+            offset = max_neighbors * self.num_phases
+            if 0 <= phase < self.num_phases:
+                features[offset + idx * self.num_phases + phase] = 1.0
+
+        for idx, (nid, queue) in enumerate(neighbor_queues.items()):
+            if idx >= max_neighbors:
+                break
+            offset = max_neighbors * self.num_phases * 2
+            features[offset + idx] = self._normalized_queue(queue)
+
+        return features
 
     def get_value(self, features: list[float]) -> float:
         value = sum(w * x for w, x in zip(self.weights, features))
@@ -417,10 +478,13 @@ class ADPAgent:
                 downstream_capacities,
             )
             q_value = reward + gamma * future_value
+            # problem!!!
             q_value += self.queue_priority_weight * served_queue / self.queue_scale
             if not math.isfinite(q_value):
                 continue
             q_values[action] = q_value
+            #if getattr(self, "agent_id", "") == "A3":
+                #print(f"[📊 Q值成分拆解] 行動 {action} | Reward: {reward:.2f} | Future(AI大腦): {gamma * future_value:.2f} | Greedy(排隊項): {self.queue_priority_weight * served_queue / self.queue_scale:.2f} | 總分: {q_value:.2f}")
             if q_value > max_q:
                 max_q = q_value
                 best_action = action

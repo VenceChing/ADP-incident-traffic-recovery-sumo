@@ -248,11 +248,21 @@ def reset_episode_detector() -> None:
 
 
 def build_sumo_args(seed: int) -> list[str]:
+    import os
+    # 1. 取得當前檔案的絕對路徑，並回推到專案根目錄
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+    
+    # 2. 只匯入確定存在的變數
+    from .config import SCENARIO_DIR, SUMO_CONFIG, STEP_LENGTH, REROUTING_PROBABILITY, REROUTING_PERIOD
+
+    # 3. 算出 sumocfg 的絕對路徑
+    sumo_config_abs = os.path.join(project_root, SCENARIO_DIR, SUMO_CONFIG)
+
+    # 4. 移除 --route-files 參數，讓 SUMO 直接讀取設定檔內部的車流設定
     sumo_args = [
         "-c",
-        SUMO_CONFIG,
-        "--route-files",
-        ACTIVE_ROUTE_FILE,
+        sumo_config_abs,
         "--start",
         "--step-length",
         str(STEP_LENGTH),
@@ -266,8 +276,15 @@ def build_sumo_args(seed: int) -> list[str]:
         str(seed),
         "--no-warnings",
     ]
-    if SIM_END_TIME is not None:
-        sumo_args.extend(["--end", str(SIM_END_TIME)])
+    
+    # 嘗試匯入 SIM_END_TIME，如果不存在就跳過
+    try:
+        from .config import SIM_END_TIME
+        if SIM_END_TIME is not None:
+            sumo_args.extend(["--end", str(SIM_END_TIME)])
+    except ImportError:
+        pass
+        
     return sumo_args
 
 

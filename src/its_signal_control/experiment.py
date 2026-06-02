@@ -7,6 +7,7 @@ import traci
 from .agent import ADPAgent
 from .config import *
 from .controllers import (
+    DecisionCache,
     get_action_pressure_features,
     get_agent_queues,
     select_adp_action,
@@ -14,6 +15,7 @@ from .controllers import (
     select_max_pressure_action,
     update_adp_agents,
 )
+from .decision_intervals import DecisionOrderSchedule
 from .env import SumoEnv
 from .metrics import (
     append_episode_metrics,
@@ -126,6 +128,28 @@ def run_episode(
     sim_time = traci.simulation.getTime()
     episode_ended = False
 
+    # === 初始化決策順序與決策快取 ===
+    decision_order_schedule = DecisionOrderSchedule(
+        strategy=DECISION_ORDER_STRATEGY,
+        agent_ids=list(agents.keys()),
+        incident_edges=incident_edges,
+        decision_interval=DECISION_INTERVAL,
+        random_seed=RANDOM_SEED + episode,
+    )
+    decision_cache = DecisionCache()
+
+    # 🔥 【核心修正：全面接管紅綠燈控制權】 🔥
+    # 在模擬正式開始前，把所有紅綠燈的內建自動計畫關閉，改成完全由 Python 手動控制
+    for agent_id in agents.keys():
+        try:
+            # "off" 會讓 SUMO 釋放控制權，燈號將完全聽從 setRedYellowGreenState 的指揮
+            traci.trafficlight.setProgram(agent_id, "off")
+        except traci.TraCIException as e:
+            print(f"[警告] 無法關閉路口 {agent_id} 的內建計畫: {e}")
+
+    first_agent_id = list(agents.keys())[0]
+    print(f"[🔍 權重終極檢查] 模擬即將開始，路口 {first_agent_id} 的當前真實權重為: {agents[first_agent_id].weights}")
+
     while traci.simulation.getMinExpectedNumber() > 0 and not episode_ended:
         sim_time = traci.simulation.getTime()
         if sim_time >= SIM_END_TIME:
@@ -137,7 +161,37 @@ def run_episode(
         learning_active = sim_time >= INCIDENT_TIME
         rr_action = select_round_robin_action(sim_time)
 
-        for agent_id, agent in agents.items():
+        # === 決策順序（支持 staggered 或 unified）===
+        if DECISION_ORDER_STRATEGY == "unified":
+            # 所有路口同時決策
+            decision_order = list(agents.keys())
+        elif DECISION_ORDER_STRATEGY == "greedy_dynamic":
+            # 動態貪心需要當前隊列信息
+            current_queues_all = {
+                agent_id: sum(
+                    get_agent_queues(env, agent_id, sim_time, incident_edges).values()
+                )
+                for agent_id in agents.keys()
+            }
+            decision_order = decision_order_schedule.decision_order_for_timestep(
+                sim_time, {aid: {} for aid, _ in current_queues_all.items()}
+            )
+        else:
+            # 其他策略使用預計算的順序
+            decision_order = decision_order_schedule.decision_order_for_timestep(sim_time)
+
+        for agent_id in decision_order:
+            agent = agents[agent_id]
+
+            # === 防止連續決策檢查 ===
+            if PREVENT_CONSECUTIVE_DECISION and not decision_cache.can_decide(
+                agent_id, sim_time, DECISION_INTERVAL
+            ):
+                # 保持上一個動作
+                if agent_id in target_actions:
+                    target_actions[agent_id] = target_actions.get(agent_id, python_current_phases[agent_id])
+                continue
+
             current_queues = get_agent_queues(env, agent_id, sim_time, incident_edges)
             current_phase = python_current_phases[agent_id]
 
@@ -164,24 +218,47 @@ def run_episode(
                 )
 
             target_actions[agent_id] = action
+
+            # === 快取此路口的決策信息供鄰近路口使用 ===
+            total_queue = sum(current_queues.values())
+            decision_cache.cache_decision(agent_id, action, current_phase, total_queue, sim_time)
+
             if adp_control and learning_active:
                 dist_to_incident = get_incident_distance(agent_id, incident_edges)
                 incident_direction = get_incident_direction(agent_id, incident_edges)
                 time_discrete = int((sim_time - INCIDENT_TIME) // DECISION_INTERVAL)
-                action_pressures, downstream_queues, downstream_capacities = get_action_pressure_features(agent_id, context)
+                action_pressures, downstream_queues, downstream_capacities = get_action_pressure_features(
+                    agent_id, context
+                )
+
+                # === 獲取鄰近路口信息（如果啟用）===
+                neighbor_actions = {}
+                neighbor_phases = {}
+                neighbor_queues = {}
+                if ALLOW_NEIGHBOR_INFO:
+                    neighbors = decision_order_schedule.get_neighbors(agent_id)
+                    neighbor_actions, neighbor_phases, neighbor_queues = decision_cache.get_neighbor_info(
+                        agent_id, neighbors
+                    )
+
+                features = agent.extract_features(
+                    current_queues,
+                    current_phase,
+                    dist_to_incident,
+                    incident_direction,
+                    time_discrete,
+                    True,
+                    action=action,
+                    action_pressures=action_pressures,
+                    downstream_queues=downstream_queues,
+                    downstream_capacities=downstream_capacities,
+                    neighbor_actions=neighbor_actions,
+                    neighbor_phases=neighbor_phases,
+                    neighbor_queues=neighbor_queues,
+                )
+
                 step_cache[agent_id] = {
-                    "features": agent.extract_features(
-                        current_queues,
-                        current_phase,
-                        dist_to_incident,
-                        incident_direction,
-                        time_discrete,
-                        True,
-                        action=action,
-                        action_pressures=action_pressures,
-                        downstream_queues=downstream_queues,
-                        downstream_capacities=downstream_capacities,
-                    ),
+                    "features": features,
                     "action": action,
                     "current_queues": current_queues,
                     "current_phase": current_phase,
@@ -193,6 +270,7 @@ def run_episode(
             if TRACE_ACTIONS and step % (DECISION_INTERVAL * TRACE_ACTION_INTERVALS) == 0:
                 print_action_trace(agent_id, agent, current_queues, current_phase, action, q_values)
 
+        # === 決策週期末：應用決策並清空快取 ===
         for sec in range(DECISION_INTERVAL):
             for agent_id in agents.keys():
                 current_p = python_current_phases[agent_id]
@@ -341,6 +419,9 @@ def run_episode(
                 else:
                     switch_count += 1
             python_current_phases[agent_id] = target_actions[agent_id]
+
+        # === 決策週期末清空快取（準備下個週期）===
+        decision_cache.clear()
 
         if train_adp and adp_control and learning_active:
             update_adp_agents(

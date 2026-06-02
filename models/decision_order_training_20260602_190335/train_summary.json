@@ -1,0 +1,32 @@
+{
+  "strategy": "random",
+  "description": "隨機順序：基準對照",
+  "feature_dimension": 30,
+  "allow_neighbor_info": true,
+  "training_episodes": 3,
+  "total_elapsed_seconds": 47.319158,
+  "success_count": 0,
+  "success_rate": 0.0,
+  "gridlock_count": 0,
+  "gridlock_rate": 0.0,
+  "training_details": [
+    {
+      "episode": 0,
+      "status": "SUCCESS",
+      "success": false,
+      "gridlock": false
+    },
+    {
+      "episode": 1,
+      "status": "SUCCESS",
+      "success": false,
+      "gridlock": false
+    },
+    {
+      "episode": 2,
+      "status": "SUCCESS",
+      "success": false,
+      "gridlock": false
+    }
+  ]
+}

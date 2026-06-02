@@ -193,3 +193,61 @@ def update_adp_agents(
             ALPHA,
             GAMMA,
         )
+
+
+class DecisionCache:
+    """存儲本決策週期內已決策的路口信息"""
+
+    def __init__(self) -> None:
+        self.actions: dict[str, int] = {}  # agent_id -> action
+        self.phases: dict[str, int] = {}  # agent_id -> current_phase
+        self.queues: dict[str, float] = {}  # agent_id -> total_queue
+        self.last_decision_time: dict[str, float] = {}  # agent_id -> sim_time
+
+    def cache_decision(
+        self,
+        agent_id: str,
+        action: int,
+        current_phase: int,
+        total_queue: float,
+        sim_time: float,
+    ) -> None:
+        """快取某路口的決策信息"""
+        self.actions[agent_id] = action
+        self.phases[agent_id] = current_phase
+        self.queues[agent_id] = total_queue
+        self.last_decision_time[agent_id] = sim_time
+
+    def get_neighbor_info(
+        self,
+        agent_id: str,
+        neighbors: list[str],
+    ) -> tuple[dict[str, int], dict[str, int], dict[str, float]]:
+        """獲取鄰近路口的決策信息"""
+        neighbor_actions = {}
+        neighbor_phases = {}
+        neighbor_queues = {}
+
+        for nid in neighbors:
+            if nid in self.actions:
+                neighbor_actions[nid] = self.actions[nid]
+                neighbor_phases[nid] = self.phases[nid]
+                neighbor_queues[nid] = self.queues[nid]
+
+        return neighbor_actions, neighbor_phases, neighbor_queues
+
+    def can_decide(
+        self,
+        agent_id: str,
+        sim_time: float,
+        decision_interval: float,
+    ) -> bool:
+        """檢查是否應該決策（防止連續決策）"""
+        last_time = self.last_decision_time.get(agent_id, -float("inf"))
+        return (sim_time - last_time) >= decision_interval
+
+    def clear(self) -> None:
+        """清空快取（準備下一個決策週期）"""
+        self.actions.clear()
+        self.phases.clear()
+        self.queues.clear()

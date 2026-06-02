@@ -55,11 +55,22 @@ def sanitize_weights(weights: list[float], expected_dim: int) -> list[float] | N
     return weights
 
 
-def load_agent_weights(agents: dict[str, ADPAgent]) -> None:
-    candidate_paths = [WEIGHTS_PATH]
-    if LEGACY_WEIGHTS_PATH != WEIGHTS_PATH:
-        candidate_paths.append(LEGACY_WEIGHTS_PATH)
-    source_path = next((path for path in candidate_paths if os.path.exists(path)), None)
+def load_agent_weights(agents: dict[str, ADPAgent], weights_path: str | None = None) -> None:
+    """
+    載入 agent 權重
+    
+    Args:
+        agents: Agent 字典
+        weights_path: 可選，指定權重檔案路徑。如果不指定，使用預設路徑
+    """
+    if weights_path is None:
+        candidate_paths = [WEIGHTS_PATH]
+        if LEGACY_WEIGHTS_PATH != WEIGHTS_PATH:
+            candidate_paths.append(LEGACY_WEIGHTS_PATH)
+        source_path = next((path for path in candidate_paths if os.path.exists(path)), None)
+    else:
+        source_path = weights_path if os.path.exists(weights_path) else None
+    
     if source_path is None:
         print("WARNING: No saved ADP weights found; evaluation will use current in-memory weights.")
         return
@@ -80,8 +91,20 @@ def load_agent_weights(agents: dict[str, ADPAgent]) -> None:
             agents[agent_id].import_transition_model(payload.get("transition_model", {}))
 
 
-def save_agent_weights(agents: dict[str, ADPAgent]) -> None:
-    ensure_results_dir()
+def save_agent_weights(agents: dict[str, ADPAgent], weights_path: str | None = None) -> None:
+    """
+    保存 agent 權重
+    
+    Args:
+        agents: Agent 字典
+        weights_path: 可選，指定權重檔案路徑。如果不指定，使用預設路徑
+    """
+    if weights_path is None:
+        ensure_results_dir()
+        save_path = WEIGHTS_PATH
+    else:
+        save_path = weights_path
+    
     weights_data = {
         "schema_version": 2,
         "adp_variant": ADP_VARIANT_LABEL,
@@ -93,7 +116,7 @@ def save_agent_weights(agents: dict[str, ADPAgent]) -> None:
             for agent_id, agent in agents.items()
         },
     }
-    with open(WEIGHTS_PATH, "w", encoding="utf-8") as handle:
+    with open(save_path, "w", encoding="utf-8") as handle:
         json.dump(weights_data, handle)
 
 
