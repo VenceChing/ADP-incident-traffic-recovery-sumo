@@ -110,7 +110,7 @@ def print_action_trace(
     action: int,
     q_values: list[float],
 ) -> None:
-    action_names = ["N", "E", "S", "W"]
+    action_names = agent.action_names
     queue_by_action = [
         sum(current_queues.get(edge_id, 0.0) for edge_id in action_edges)
         for action_edges in agent.action_edges
@@ -241,7 +241,7 @@ def summarize_paired_eval_metrics() -> list[dict[str, Any]]:
         if row["controller"] == "adp_eval"
     }
     paired_rows = []
-    for baseline in ["greedy", "max_pressure"]:
+    for baseline in sorted({row["controller"] for row in rows} - {"adp_eval", "adp_train"}):
         baseline_rows = {
             (row["episode"], row["seed"], row["incident_edges"]): row
             for row in rows
@@ -395,57 +395,113 @@ def render_eval_comparison(summary_rows: list[dict[str, Any]]) -> None:
     if not summary_rows:
         return
     width = 1050
-    height = 520
-    left = 90
-    top = 70
-    chart_height = 330
-    bar_width = 26
-    group_gap = 62
-    metric_gap = 32
+    panel_height = 142
+    left = 210
+    right = 135
+    top = 62
+    gap = 34
+    height = top + 5 * panel_height + 4 * gap + 58
+    chart_width = width - left - right
+    bar_height = 18
+    row_gap = 8
     metrics = [
-        ("success_rate", "#16a34a"),
-        ("gridlock_rate", "#dc2626"),
-        ("mean_ttr_success_only", "#0891b2"),
-        ("mean_queue_excess_area", "#2563eb"),
-        ("mean_throughput_recovery", "#f59e0b"),
+        ("success_rate", "Success rate", "higher is better"),
+        ("gridlock_rate", "Gridlock rate", "lower is better"),
+        ("mean_ttr_success_only", "Mean TTR, successes only", "lower is better"),
+        ("mean_queue_excess_area", "Mean queue excess area", "lower is better"),
+        ("mean_throughput_recovery", "Mean throughput recovery", "higher is better"),
     ]
-    max_by_metric = {}
-    for key, _ in metrics:
-        values = [float(row[key]) for row in summary_rows if row[key] != ""]
-        max_by_metric[key] = max(max(values) if values else 1.0, 1.0)
+    controller_colors = {
+        "adp_eval": "#2563eb",
+        "fixed_time_rr": "#64748b",
+        "greedy": "#16a34a",
+        "max_pressure": "#f59e0b",
+    }
+
+    def value_label(value: float, key: str) -> str:
+        if "rate" in key or "recovery" in key:
+            return f"{value:.2f}"
+        if value >= 1000:
+            return f"{value:.0f}"
+        return f"{value:.1f}"
+
+    def best_controller(key: str, lower_is_better: bool) -> str | None:
+        candidates = [
+            (row["controller"], metric_float(row, key))
+            for row in summary_rows
+            if row.get(key, "") != ""
+        ]
+        if not candidates:
+            return None
+        selector = min if lower_is_better else max
+        return selector(candidates, key=lambda item: item[1])[0]
 
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="white"/>',
-        f'<text x="{left}" y="32" font-family="Arial" font-size="20" font-weight="700">Evaluation comparison by controller</text>',
-        f'<line x1="{left}" y1="{top + chart_height}" x2="{width - 40}" y2="{top + chart_height}" stroke="#cbd5e1"/>',
-        f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + chart_height}" stroke="#cbd5e1"/>',
+        '<style>text{font-family:Arial,sans-serif}.axis{fill:#64748b;font-size:11px}.label{fill:#334155;font-size:12px}.title{fill:#0f172a;font-size:14px;font-weight:700}.note{fill:#64748b;font-size:11px}</style>',
+        f'<text x="28" y="30" font-family="Arial" font-size="20" font-weight="700">Evaluation comparison by metric</text>',
     ]
-    group_width = len(metrics) * metric_gap
-    for group_idx, row in enumerate(summary_rows):
-        x0 = left + 40 + group_idx * (group_width + group_gap)
-        for metric_idx, (key, color) in enumerate(metrics):
-            value = float(row[key]) if row[key] != "" else 0.0
-            normalized = value / max_by_metric[key]
-            bar_height = normalized * chart_height
-            x = x0 + metric_idx * metric_gap
-            y = top + chart_height - bar_height
-            svg.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width}" height="{bar_height:.1f}" fill="{color}"/>')
-        label_x = x0 + group_width / 2 - 20
-        svg.append(
-            f'<text x="{label_x:.1f}" y="{top + chart_height + 24}" font-family="Arial" '
-            f'font-size="12" fill="#334155">{row["controller"]}</text>'
+
+    for panel_idx, (key, title, direction_note) in enumerate(metrics):
+        lower_is_better = direction_note.startswith("lower")
+        best = best_controller(key, lower_is_better)
+        y0 = top + panel_idx * (panel_height + gap)
+        y1 = y0 + panel_height
+        values = [metric_float(row, key) for row in summary_rows if row.get(key, "") != ""]
+        max_value = max(values) if values else 1.0
+        if "rate" in key or "recovery" in key:
+            max_value = max(1.0, max_value)
+        elif max_value <= 0:
+            max_value = 1.0
+        scale_max = max_value * 1.08
+
+        svg.extend(
+            [
+                f'<text x="28" y="{y0 - 14}" class="title">{title}</text>',
+                f'<text x="300" y="{y0 - 14}" class="note">{direction_note}</text>',
+                f'<line x1="{left}" y1="{y1}" x2="{width - right}" y2="{y1}" stroke="#cbd5e1"/>',
+                f'<line x1="{left}" y1="{y0 + 12}" x2="{left}" y2="{y1}" stroke="#e2e8f0"/>',
+                f'<line x1="{width - right}" y1="{y0 + 12}" x2="{width - right}" y2="{y1}" stroke="#e2e8f0"/>',
+                f'<text x="{left}" y="{y1 + 17}" text-anchor="middle" class="axis">0</text>',
+                f'<text x="{width - right}" y="{y1 + 17}" text-anchor="middle" class="axis">{value_label(max_value, key)}</text>',
+            ]
         )
 
-    legend_x = left
-    legend_y = height - 70
-    for key, color in metrics:
+        for row_idx, row in enumerate(summary_rows):
+            controller = row["controller"]
+            y = y0 + 20 + row_idx * (bar_height + row_gap)
+            raw_value = row.get(key, "")
+            value = metric_float(row, key) if raw_value != "" else 0.0
+            bar_width = (value / scale_max) * chart_width if scale_max else 0.0
+            color = controller_colors.get(controller, "#334155")
+            label = "n/a" if raw_value == "" else value_label(value, key)
+            is_best = controller == best
+            font_weight = "700" if is_best else "400"
+            outline = "#0f172a" if is_best else "none"
+            svg.append(
+                f'<text x="{left - 16}" y="{y + 13}" text-anchor="end" class="label" '
+                f'font-weight="{font_weight}">{controller}</text>'
+            )
+            svg.append(
+                f'<rect x="{left}" y="{y}" width="{bar_width:.1f}" height="{bar_height}" '
+                f'fill="{color}" stroke="{outline}" stroke-width="{2 if is_best else 0}"/>'
+            )
+            value_x = min(left + bar_width + 8, width - right + 8)
+            svg.append(f'<text x="{value_x:.1f}" y="{y + 13}" class="label">{label}</text>')
+            if is_best:
+                svg.append(f'<text x="{width - right + 58}" y="{y + 13}" class="note">best</text>')
+
+    legend_x = 28
+    legend_y = height - 28
+    for controller in [row["controller"] for row in summary_rows]:
+        color = controller_colors.get(controller, "#334155")
         svg.append(f'<rect x="{legend_x}" y="{legend_y}" width="12" height="12" fill="{color}"/>')
         svg.append(
             f'<text x="{legend_x + 18}" y="{legend_y + 11}" font-family="Arial" '
-            f'font-size="12" fill="#334155">{key}</text>'
+            f'font-size="12" fill="#334155">{controller}</text>'
         )
-        legend_x += 195
+        legend_x += 145
     svg.append("</svg>")
     with open(EVAL_SVG_PATH, "w", encoding="utf-8") as handle:
         handle.write("\n".join(svg))

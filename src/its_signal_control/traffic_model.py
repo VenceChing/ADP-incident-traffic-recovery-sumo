@@ -4,6 +4,13 @@ from typing import Any
 import traci
 
 from .agent import ADPAgent
+from .actions import (
+    DIRECTION_TO_INDEX,
+    action_matches,
+    direction_indices_for_action,
+    get_action_definitions,
+    movement_group_for_connection,
+)
 from .config import *
 
 ACTIVE_ROUTE_FILE = ROUTE_FILE
@@ -262,6 +269,7 @@ def build_sumo_args(seed: int) -> list[str]:
         str(REROUTING_PERIOD),
         "--time-to-teleport",
         "-1",
+        "--ignore-route-errors",
         "--seed",
         str(seed),
         "--no-warnings",
@@ -289,13 +297,45 @@ def lane_to_dir(lane_id: str) -> str | None:
     return "S" if dy > 0 else "N"
 
 
+def _queue_key_for_lane(lane_id: str | None, queue_key_mode: str) -> str | None:
+    if lane_id is None:
+        return None
+    if queue_key_mode == "lane":
+        return lane_id if not lane_id.startswith(":") else None
+    try:
+        edge_id = traci.lane.getEdgeID(lane_id)
+    except traci.TraCIException:
+        return None
+    return edge_id if edge_id and not edge_id.startswith(":") else None
+
+
+def _append_unique(values: list[str], value: str | None) -> None:
+    if value is not None and value not in values:
+        values.append(value)
+
+
+def _lane_capacity(lane_id: str) -> float:
+    try:
+        return max(1.0, traci.lane.getLength(lane_id) / ADP_VEHICLE_SPACING)
+    except traci.TraCIException:
+        return 1.0
+
+
 def build_controller_context(tls_ids: list[str]) -> dict[str, Any]:
-    dir_to_action = {"N": 0, "E": 1, "S": 2, "W": 3}
+    action_definitions = get_action_definitions(ACTION_SPACE)
+    action_names = [definition.name for definition in action_definitions]
+    queue_key_mode = "lane" if ACTION_SPACE == "two_lane_8" else "edge"
     tls_state_len = {}
-    tls_dir_links = {}
+    tls_action_links = {}
     tls_all_red = {}
+    action_upstream_keys: dict[str, dict[int, list[str]]] = {}
+    action_downstream_keys: dict[str, dict[int, list[str]]] = {}
     action_downstream_edges: dict[str, dict[int, list[tuple[str, str | None]]]] = {}
     edge_capacities: dict[str, float] = {}
+    queue_key_capacities: dict[str, float] = {}
+    lane_to_queue_key: dict[str, str] = {}
+    queue_key_approaches: dict[str, str] = {}
+    queue_key_movements: dict[str, str] = {}
 
     for edge_id in traci.edge.getIDList():
         if edge_id.startswith(":"):
@@ -305,17 +345,24 @@ def build_controller_context(tls_ids: list[str]) -> dict[str, Any]:
             lane_count = traci.edge.getLaneNumber(edge_id)
             for lane_index in range(lane_count):
                 lane_id = f"{edge_id}_{lane_index}"
-                capacity += traci.lane.getLength(lane_id) / ADP_VEHICLE_SPACING
+                lane_capacity = _lane_capacity(lane_id)
+                capacity += lane_capacity
+                if queue_key_mode == "lane":
+                    queue_key_capacities[lane_id] = lane_capacity
         except traci.TraCIException:
             capacity = 0.0
         edge_capacities[edge_id] = max(1.0, capacity)
+        if queue_key_mode == "edge":
+            queue_key_capacities[edge_id] = edge_capacities[edge_id]
 
     for tls_id in tls_ids:
         links = traci.trafficlight.getControlledLinks(tls_id)
         tls_state_len[tls_id] = len(links)
         tls_all_red[tls_id] = "r" * len(links)
-        action_indices = {0: [], 1: [], 2: [], 3: []}
-        action_downstream_edges[tls_id] = {0: [], 1: [], 2: [], 3: []}
+        action_indices = {action: [] for action in range(len(action_definitions))}
+        action_upstream_keys[tls_id] = {action: [] for action in range(len(action_definitions))}
+        action_downstream_keys[tls_id] = {action: [] for action in range(len(action_definitions))}
+        action_downstream_edges[tls_id] = {action: [] for action in range(len(action_definitions))}
 
         for idx, link_group in enumerate(links):
             if not link_group:
@@ -327,24 +374,46 @@ def build_controller_context(tls_ids: list[str]) -> dict[str, Any]:
             direction = lane_to_dir(from_lane)
             if direction is None:
                 continue
-            action = dir_to_action[direction]
-            action_indices[action].append(idx)
+            movement_group = movement_group_for_connection(from_lane, action_space=ACTION_SPACE)
+            from_key = _queue_key_for_lane(from_lane, queue_key_mode)
+            to_key = _queue_key_for_lane(to_lane, queue_key_mode) if to_lane else None
 
-            from_edge = traci.lane.getEdgeID(from_lane)
-            try:
-                to_edge = traci.lane.getEdgeID(to_lane) if to_lane else None
-            except traci.TraCIException:
-                to_edge = None
-            if from_edge and not from_edge.startswith(":"):
-                action_downstream_edges[tls_id][action].append((from_edge, to_edge))
+            if from_key is not None:
+                lane_to_queue_key[from_lane] = from_key
+                queue_key_approaches[from_key] = direction
+                queue_key_movements[from_key] = movement_group
 
-        tls_dir_links[tls_id] = action_indices
+            for action, definition in enumerate(action_definitions):
+                if not action_matches(definition, direction, movement_group):
+                    continue
+                action_indices[action].append(idx)
+                _append_unique(action_upstream_keys[tls_id][action], from_key)
+                _append_unique(action_downstream_keys[tls_id][action], to_key)
+                if from_key is not None:
+                    action_downstream_edges[tls_id][action].append((from_key, to_key))
+
+        tls_action_links[tls_id] = action_indices
 
     return {
+        "action_space": ACTION_SPACE,
+        "action_names": action_names,
+        "action_definitions": action_definitions,
+        "action_approaches": [
+            direction_indices_for_action(definition)
+            for definition in action_definitions
+        ],
+        "queue_key_mode": queue_key_mode,
         "tls_state_len": tls_state_len,
-        "tls_dir_links": tls_dir_links,
+        "tls_dir_links": tls_action_links,
+        "tls_action_links": tls_action_links,
         "tls_all_red": tls_all_red,
+        "action_upstream_keys": action_upstream_keys,
+        "action_downstream_keys": action_downstream_keys,
         "action_downstream_edges": action_downstream_edges,
+        "lane_to_queue_key": lane_to_queue_key,
+        "queue_key_approaches": queue_key_approaches,
+        "queue_key_movements": queue_key_movements,
+        "queue_key_capacities": queue_key_capacities,
         "edge_capacities": edge_capacities,
     }
 
@@ -372,31 +441,17 @@ def infer_current_action(context: dict[str, Any], tls_id: str, fallback: int = 0
     return best_action if best_green_count > 0 else fallback
 
 
-def build_agents(tls_ids: list[str]) -> dict[str, ADPAgent]:
-    dir_to_action = {"N": 0, "E": 1, "S": 2, "W": 3}
+def build_agents(tls_ids: list[str], context: dict[str, Any] | None = None) -> dict[str, ADPAgent]:
+    if context is None:
+        context = build_controller_context(tls_ids)
     agents = {}
     for tls_id in tls_ids:
-        lanes = traci.trafficlight.getControlledLanes(tls_id)
-        action_edges = {0: [], 1: [], 2: [], 3: []}
-        for lane in lanes:
-            try:
-                edge = traci.lane.getEdgeID(lane)
-            except traci.TraCIException:
-                continue
-            if not edge or edge.startswith(":"):
-                continue
-            direction = lane_to_dir(lane)
-            if direction is None:
-                continue
-            action = dir_to_action[direction]
-            if edge not in action_edges[action]:
-                action_edges[action].append(edge)
-
         incoming_edges = []
         action_edge_lists = []
-        for action in range(4):
-            action_edge_lists.append(action_edges[action])
-            for edge in action_edges[action]:
+        for action in range(len(context["action_names"])):
+            action_edges = list(context["action_upstream_keys"][tls_id].get(action, []))
+            action_edge_lists.append(action_edges)
+            for edge in action_edges:
                 if edge not in incoming_edges:
                     incoming_edges.append(edge)
 
@@ -404,12 +459,32 @@ def build_agents(tls_ids: list[str]) -> dict[str, ADPAgent]:
             agent_id=tls_id,
             incoming_edges=incoming_edges,
             action_edges=action_edge_lists,
+            num_phases=len(context["action_names"]),
+            action_names=context["action_names"],
+            action_approaches=context["action_approaches"],
+            queue_movements={
+                queue_key: context["queue_key_movements"].get(queue_key, "")
+                for queue_key in incoming_edges
+            },
+            queue_approaches={
+                queue_key: context["queue_key_approaches"].get(queue_key, "")
+                for queue_key in incoming_edges
+            },
             decision_interval=DECISION_INTERVAL,
             traffic_rate=RATE,
             switch_penalty=get_switch_penalty(),
             gridlock_penalty=ADP_GRIDLOCK_PENALTY,
+            action_scoring_mode=ADP_ACTION_SCORING_MODE,
             queue_priority_weight=ADP_QUEUE_PRIORITY_WEIGHT,
             total_queue_weight=ADP_TOTAL_QUEUE_WEIGHT,
+            lane_fairness_weight=ADP_LANE_FAIRNESS_WEIGHT,
+            lane_fairness_margin=ADP_LANE_FAIRNESS_MARGIN,
+            residual_greedy_weight=ADP_RESIDUAL_GREEDY_WEIGHT,
+            residual_pressure_weight=ADP_RESIDUAL_PRESSURE_WEIGHT,
+            residual_value_weight=ADP_RESIDUAL_VALUE_WEIGHT,
+            residual_lookahead_weight=ADP_RESIDUAL_LOOKAHEAD_WEIGHT,
+            residual_downstream_penalty_weight=ADP_RESIDUAL_DOWNSTREAM_PENALTY_WEIGHT,
+            lookahead_depth=ADP_LOOKAHEAD_DEPTH,
             queue_scale=ADP_QUEUE_SCALE,
             distance_scale=ADP_DISTANCE_SCALE,
             time_scale=ADP_TIME_SCALE,

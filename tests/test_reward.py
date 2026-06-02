@@ -39,3 +39,34 @@ def test_gridlock_penalty_reduces_reward() -> None:
     normal = agent.calculate_reward({"A2B2": 10.0}, {"A2B2": 0.0}, 1.1, 0, 0, False)
     gridlock = agent.calculate_reward({"A2B2": 10.0}, {"A2B2": 0.0}, 1.1, 0, 0, True)
     assert gridlock < normal
+
+
+def test_lane_fairness_penalizes_imbalanced_two_lane_queues() -> None:
+    agent = ADPAgent(
+        "B2",
+        ["B3B2_0", "B3B2_1"],
+        action_edges=[["B3B2_0"], ["B3B2_1"], [], []],
+        queue_movements={"B3B2_0": "SR", "B3B2_1": "L"},
+        queue_approaches={"B3B2_0": "N", "B3B2_1": "N"},
+        lane_fairness_weight=1.0,
+        lane_fairness_margin=0.0,
+        queue_scale=50.0,
+    )
+    balanced = agent.calculate_reward(
+        {"B3B2_0": 10.0, "B3B2_1": 10.0},
+        {"B3B2_0": 0.0, "B3B2_1": 0.0},
+        1.1,
+        0,
+        0,
+        False,
+    )
+    imbalanced = agent.calculate_reward(
+        {"B3B2_0": 20.0, "B3B2_1": 0.0},
+        {"B3B2_0": 0.0, "B3B2_1": 0.0},
+        1.1,
+        0,
+        0,
+        False,
+    )
+
+    assert imbalanced < balanced

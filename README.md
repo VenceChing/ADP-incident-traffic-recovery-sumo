@@ -19,6 +19,7 @@ The default setup packages the current historical-best configuration and weights
 configs/                      Experiment presets: historical_best, training, evaluation, smoke
 models/historical_best/        Default ADP weights and manifest
 scenarios/grid_4x4/            Reproducible SUMO network, route, and GUI files
+scenarios/grid_4x4_2lane/      Two-lane network with movement-specific signal actions
 src/its_signal_control/        Core Python package
 scripts/                       Reproduction, training, evaluation, and OSM ingestion scripts
 tests/                         Core unit tests that do not require SUMO GUI
@@ -30,6 +31,7 @@ Core modules:
 - `agent.py`: ADP agent, feature extraction, linear value function, reward, and transition heuristic.
 - `experiment.py`: episode loop plus training and evaluation orchestration.
 - `controllers.py`: `fixed_time_rr`, `greedy`, `max_pressure`, and `adp_eval` controllers.
+- `actions.py`, `scenario_validation.py`: action-space definitions and two-lane network validation.
 - `traffic_model.py`: SUMO launch arguments, incident candidates, geometry helpers, and episode status logic.
 - `metrics.py`: CSV metrics, summaries, paired comparisons, plots, and weight persistence.
 - `routing.py`, `analysis.py`, `maps.py`, `features.py`, `decision_intervals.py`: extension boundaries for upcoming experiments.
@@ -123,6 +125,29 @@ python -m its_signal_control.cli evaluate \
   --weights models/historical_best/adp_agent_weights.json \
   --headless
 ```
+
+Two-lane validation:
+
+```bash
+python scripts/create_two_lane_scenario.py
+python scripts/validate_two_lane_scenario.py
+python scripts/calibrate_two_lane_demand.py
+python - <<'PY'
+from pathlib import Path
+import os
+from its_signal_control import config
+config.apply_preset(Path("configs/two_lane_validation.yaml"))
+os.chdir(config.REPO_ROOT / config.SCENARIO_DIR)
+from its_signal_control import experiment
+experiment.main()
+PY
+```
+
+The two-lane action space is configured by `ACTION_SPACE: "two_lane_8"`:
+`NS_SR`, `EW_SR`, `NS_L`, `EW_L`, `N_SRL`, `E_SRL`, `S_SRL`, and `W_SRL`.
+Lane `0` carries straight/right movements; lane `1` carries left and U-turn movements.
+The short demand calibration selected `RATE=3000` for two-lane train/eval presets because
+`RATE=2500` was stable but Greedy recovered too easily in the short validation horizon.
 
 Important configuration fields:
 

@@ -9,6 +9,7 @@ from .config import *
 from .controllers import (
     get_action_pressure_features,
     get_agent_queues,
+    get_queue_value,
     select_adp_action,
     select_greedy_action,
     select_max_pressure_action,
@@ -49,12 +50,43 @@ from .traffic_model import (
     set_active_route_file,
     split_incidents,
 )
-from .utils import generate_routes
 from .utils import cleanup_route_temp_files
+from .utils import generate_routes
+from .utils import get_route_horizon
+from .utils import route_file_covers_time
 
 
-def select_round_robin_action(sim_time: float) -> int:
-    return int(sim_time // DECISION_INTERVAL) % 4
+def get_controller_decision_interval(controller: str) -> int:
+    if controller in {"fixed_time", "fixed_time_rr"}:
+        return FIXED_TIME_DECISION_INTERVAL
+    return DECISION_INTERVAL
+
+
+def get_active_decision_interval(controller: str, sim_time: float) -> int:
+    if sim_time < INCIDENT_TIME:
+        return FIXED_TIME_DECISION_INTERVAL
+    return get_controller_decision_interval(controller)
+
+
+def select_round_robin_action(sim_time: float, action_names: list[str], decision_interval: int) -> int:
+    if action_names[:4] == ["NS_SR", "EW_SR", "NS_L", "EW_L"]:
+        action_count = 4
+    else:
+        action_count = len(action_names)
+    return int(sim_time // decision_interval) % max(1, action_count)
+
+
+def calculate_lane_fairness_imbalance(edge_ids: list[str], context: dict[str, Any]) -> float:
+    if context.get("queue_key_mode") != "lane":
+        return 0.0
+    imbalance = 0.0
+    for edge_id in edge_ids:
+        lane0 = f"{edge_id}_0"
+        lane1 = f"{edge_id}_1"
+        if lane0 not in context["queue_key_capacities"] or lane1 not in context["queue_key_capacities"]:
+            continue
+        imbalance += abs(get_queue_value(lane0, context) - get_queue_value(lane1, context))
+    return imbalance
 
 
 def run_episode(
@@ -73,6 +105,9 @@ def run_episode(
     random.seed(seed)
     traci.load(build_sumo_args(seed))
     env.incident_triggered = False
+    env._incident_edges = set()
+    env._incident_lanes_closed = False
+    env._last_incident_reroute_time = None
     add_keepalive_vehicle()
     reset_episode_detector()
 
@@ -85,6 +120,10 @@ def run_episode(
     baseline_queues = {edge_id: 0.0 for edge_id in edge_ids}
     baseline_queue_sums = {edge_id: 0.0 for edge_id in edge_ids}
     baseline_queue_counts = {edge_id: 0 for edge_id in edge_ids}
+    control_queue_keys = list(context["queue_key_capacities"].keys())
+    baseline_control_queues = {queue_key: 0.0 for queue_key in control_queue_keys}
+    baseline_control_queue_sums = {queue_key: 0.0 for queue_key in control_queue_keys}
+    baseline_control_queue_counts = {queue_key: 0 for queue_key in control_queue_keys}
     baseline_arrival_total = 0
     baseline_arrival_start = None
     arrival_history: list[tuple[float, int]] = []
@@ -100,6 +139,10 @@ def run_episode(
     post_halting_ratio_sum = 0.0
     post_halting_ratio_count = 0
     max_post_halting_ratio = 0.0
+    lane_fairness_sum = 0.0
+    lane_fairness_count = 0
+    max_lane_fairness_imbalance = 0.0
+    final_lane_fairness_imbalance = 0.0
 
     queue_excess_area = 0.0
     max_nonincident_queue_excess = 0.0
@@ -135,10 +178,11 @@ def run_episode(
         step_cache: dict[str, dict[str, Any]] = {}
         target_actions: dict[str, int] = {}
         learning_active = sim_time >= INCIDENT_TIME
-        rr_action = select_round_robin_action(sim_time)
+        decision_interval = get_active_decision_interval(controller, sim_time)
+        rr_action = select_round_robin_action(sim_time, context["action_names"], decision_interval)
 
         for agent_id, agent in agents.items():
-            current_queues = get_agent_queues(env, agent_id, sim_time, incident_edges)
+            current_queues = get_agent_queues(env, agent_id, sim_time, incident_edges, context)
             current_phase = python_current_phases[agent_id]
 
             if not learning_active or fixed_rr_control:
@@ -148,14 +192,14 @@ def run_episode(
                 action = select_greedy_action(agent, current_queues)
                 q_values = [0.0] * agent.num_phases
             elif controller == "max_pressure":
-                action = select_max_pressure_action(agent_id, context)
+                action = select_max_pressure_action(agent, agent_id, context)
                 q_values = [0.0] * agent.num_phases
             else:
                 action, q_values = select_adp_action(
                     agent_id,
                     agent,
                     current_queues,
-                    baseline_queues,
+                    baseline_control_queues,
                     current_phase,
                     sim_time,
                     incident_edges,
@@ -190,10 +234,10 @@ def run_episode(
                     "downstream_capacities": downstream_capacities,
                 }
 
-            if TRACE_ACTIONS and step % (DECISION_INTERVAL * TRACE_ACTION_INTERVALS) == 0:
+            if TRACE_ACTIONS and step % (decision_interval * TRACE_ACTION_INTERVALS) == 0:
                 print_action_trace(agent_id, agent, current_queues, current_phase, action, q_values)
 
-        for sec in range(DECISION_INTERVAL):
+        for sec in range(decision_interval):
             for agent_id in agents.keys():
                 current_p = python_current_phases[agent_id]
                 target_p = target_actions[agent_id]
@@ -234,6 +278,15 @@ def run_episode(
                             baseline_queues[edge_id] = (
                                 baseline_queue_sums[edge_id] / baseline_queue_counts[edge_id]
                             )
+                    if sim_time >= BASELINE_WARMUP_TIME:
+                        for queue_key in control_queue_keys:
+                            current_q = get_queue_value(queue_key, context)
+                            baseline_control_queue_sums[queue_key] += current_q
+                            baseline_control_queue_counts[queue_key] += 1
+                            baseline_control_queues[queue_key] = (
+                                baseline_control_queue_sums[queue_key]
+                                / baseline_control_queue_counts[queue_key]
+                            )
                 elif RENDER_STRESS:
                     env.render_queue_stress(baseline_queues, TAU, incident_edges)
 
@@ -242,6 +295,7 @@ def run_episode(
                     for edge_id in edge_ids
                 }
                 total_queue = sum(current_queues_all.values())
+                current_lane_fairness_imbalance = calculate_lane_fairness_imbalance(edge_ids, context)
                 total_vehicles = traci.vehicle.getIDCount()
                 halting_ratio = total_queue / total_vehicles if total_vehicles > 0 else 0.0
                 nonincident_queue_excess, nonincident_max_excess = get_queue_excess(
@@ -253,6 +307,7 @@ def run_episode(
 
                 final_total_queue = total_queue
                 final_halting_ratio = halting_ratio
+                final_lane_fairness_imbalance = current_lane_fairness_imbalance
                 final_nonincident_queue_excess = nonincident_queue_excess
                 final_incident_queue = incident_queue
                 max_incident_queue = max(max_incident_queue, incident_queue)
@@ -270,6 +325,12 @@ def run_episode(
                     post_halting_ratio_sum += halting_ratio
                     post_halting_ratio_count += 1
                     max_post_halting_ratio = max(max_post_halting_ratio, halting_ratio)
+                    lane_fairness_sum += current_lane_fairness_imbalance
+                    lane_fairness_count += 1
+                    max_lane_fairness_imbalance = max(
+                        max_lane_fairness_imbalance,
+                        current_lane_fairness_imbalance,
+                    )
                     queue_excess_area += nonincident_queue_excess * STEP_LENGTH
                     halting_ratio_history.append((sim_time, halting_ratio))
                     while halting_ratio_history and sim_time - halting_ratio_history[0][0] > FLOW_WINDOW:
@@ -313,7 +374,7 @@ def run_episode(
                             agents,
                             env,
                             step_cache,
-                            baseline_queues,
+                            baseline_control_queues,
                             python_current_phases,
                             sim_time,
                             incident_edges,
@@ -347,7 +408,7 @@ def run_episode(
                 agents,
                 env,
                 step_cache,
-                baseline_queues,
+                baseline_control_queues,
                 python_current_phases,
                 sim_time,
                 incident_edges,
@@ -424,12 +485,15 @@ def run_episode(
         "switch_count": switch_count,
         "keep_count": keep_count,
         "switch_rate": f"{switch_rate:.6f}",
+        "lane_fairness_imbalance": f"{final_lane_fairness_imbalance:.4f}",
+        "avg_lane_fairness_imbalance": f"{lane_fairness_sum / max(1, lane_fairness_count):.4f}",
+        "max_lane_fairness_imbalance": f"{max_lane_fairness_imbalance:.4f}",
         "changed_agents": changed_agents,
         "total_l1_delta": f"{total_l1_delta:.6f}",
         "avg_weight_l1": f"{avg_weight_l1:.6f}",
         "adp_variant": ADP_VARIANT_LABEL if controller in {"adp_train", "adp_eval"} else "",
         "heuristic_note": (
-            "ADP-inspired linear state-action value function with metric-aligned reward, scaled action features, and capacity-aware EWMA transition model"
+            f"ADP scoring={ADP_ACTION_SCORING_MODE}; linear state-action value function with metric-aligned reward, scaled action features, residual greedy/pressure terms, and capacity-aware EWMA transition model"
             if controller in {"adp_train", "adp_eval"}
             else ""
         ),
@@ -446,7 +510,15 @@ def run_episode(
 
 def main() -> None:
     active_route_file = ROUTE_FILE
-    if REGENERATE_ROUTES or not os.path.exists(ROUTE_FILE):
+    route_missing = not os.path.exists(ROUTE_FILE)
+    route_too_short = (not route_missing) and not route_file_covers_time(ROUTE_FILE, TIME)
+    if route_too_short:
+        horizon = get_route_horizon(ROUTE_FILE)
+        print(
+            f"Route file {ROUTE_FILE} ends at depart={horizon}; "
+            f"regenerating for configured TIME={TIME}."
+        )
+    if REGENERATE_ROUTES or route_missing or route_too_short:
         active_route_file = generate_routes(insertion_rate=RATE, generate_time=TIME, route_file=ROUTE_FILE)
     set_active_route_file(active_route_file)
     print(f"Using route file: {active_route_file}")
@@ -460,7 +532,7 @@ def main() -> None:
         print(f"Available traffic lights: {tls_ids}")
 
         context = build_controller_context(tls_ids)
-        agents = build_agents(tls_ids)
+        agents = build_agents(tls_ids, context)
         incident_candidates = build_incident_candidates(edge_ids, tls_ids)
         train_incidents, eval_incidents = split_incidents(incident_candidates)
         print(f"Incident split: train={len(train_incidents)}, eval={len(eval_incidents)}")
@@ -499,8 +571,17 @@ def main() -> None:
                 load_agent_weights(agents)
                 print_learning_status(agents, "loaded before training")
 
+            train_incident_rng = random.Random(RANDOM_SEED + 50_000)
             for episode in range(TRAIN_EPISODES):
-                incident_edges = train_incidents[episode % len(train_incidents)]
+                if TRAIN_INCIDENT_SELECTION == "random":
+                    incident_edges = train_incident_rng.choice(train_incidents)
+                elif TRAIN_INCIDENT_SELECTION == "cycle":
+                    incident_edges = train_incidents[episode % len(train_incidents)]
+                else:
+                    raise ValueError(
+                        "TRAIN_INCIDENT_SELECTION must be 'cycle' or 'random', "
+                        f"got {TRAIN_INCIDENT_SELECTION!r}"
+                    )
                 seed = RANDOM_SEED + episode
                 run_episode(
                     phase="train",

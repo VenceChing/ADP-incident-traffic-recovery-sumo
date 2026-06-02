@@ -12,10 +12,23 @@ class ADPAgent:
         decision_interval: float = 10.0,
         traffic_rate: float = 1500.0,
         num_phases: int = 4,
+        action_names: list[str] | None = None,
+        action_approaches: list[list[int]] | None = None,
+        queue_movements: dict[str, str] | None = None,
+        queue_approaches: dict[str, str] | None = None,
         switch_penalty: float = 0.0,
         gridlock_penalty: float = 20.0,
+        action_scoring_mode: str = "value",
         queue_priority_weight: float = 0.5,
         total_queue_weight: float = 0.05,
+        lane_fairness_weight: float = 0.0,
+        lane_fairness_margin: float = 5.0,
+        residual_greedy_weight: float = 1.0,
+        residual_pressure_weight: float = 0.0,
+        residual_value_weight: float = 1.0,
+        residual_lookahead_weight: float = 0.0,
+        residual_downstream_penalty_weight: float = 0.0,
+        lookahead_depth: int = 1,
         queue_scale: float = 50.0,
         distance_scale: float = 6.0,
         time_scale: float = 120.0,
@@ -36,10 +49,25 @@ class ADPAgent:
             for action in range(num_phases)
         ]
         self.num_phases = num_phases
+        self.direction_count = 4
+        self.action_names = action_names or [str(action) for action in range(num_phases)]
+        self.action_approaches = action_approaches or [
+            [action] if action < self.direction_count else []
+            for action in range(num_phases)
+        ]
+        self.queue_movements = queue_movements or {}
+        self.queue_approaches = queue_approaches or {}
         self.switch_penalty = switch_penalty
         self.gridlock_penalty = gridlock_penalty
+        self.action_scoring_mode = action_scoring_mode
         self.global_action_feature_count = 14
-        self.feature_dim = len(incoming_edges) + num_phases + num_phases + num_phases + self.global_action_feature_count
+        self.feature_dim = (
+            len(incoming_edges)
+            + num_phases
+            + self.direction_count
+            + num_phases
+            + self.global_action_feature_count
+        )
         self.weights = [0.0] * self.feature_dim
         self.queue_scale = queue_scale
         self.distance_scale = distance_scale
@@ -49,6 +77,14 @@ class ADPAgent:
         self.max_abs_td_error = max_abs_td_error
         self.queue_priority_weight = queue_priority_weight
         self.total_queue_weight = total_queue_weight
+        self.lane_fairness_weight = lane_fairness_weight
+        self.lane_fairness_margin = lane_fairness_margin
+        self.residual_greedy_weight = residual_greedy_weight
+        self.residual_pressure_weight = residual_pressure_weight
+        self.residual_value_weight = residual_value_weight
+        self.residual_lookahead_weight = residual_lookahead_weight
+        self.residual_downstream_penalty_weight = residual_downstream_penalty_weight
+        self.lookahead_depth = max(1, int(lookahead_depth))
         self.spillback_occupancy_threshold = spillback_occupancy_threshold
         self.unbounded_downstream_capacity = unbounded_downstream_capacity
         self.model_ewma_alpha = model_ewma_alpha
@@ -145,6 +181,8 @@ class ADPAgent:
             threshold = tau * baseline_queues.get(edge_id, 0.0)
             local_sum += max(0.0, current_queue - threshold) / self.queue_scale
         local_penalty = -local_sum
+        if self.lane_fairness_weight > 0.0:
+            local_penalty -= self.lane_fairness_weight * self._lane_fairness_imbalance(current_queues)
 
         switch_penalty = self.switch_penalty if action != current_phase else 0.0
         normalized_gridlock_pressure = total_queue / max(1.0, self.queue_scale)
@@ -155,6 +193,21 @@ class ADPAgent:
         )
 
         return local_penalty - switch_penalty - global_penalty
+
+    def _lane_fairness_imbalance(self, current_queues: Dict[str, float]) -> float:
+        by_approach: dict[str, dict[str, float]] = {}
+        for queue_key, queue_value in current_queues.items():
+            approach = self.queue_approaches.get(queue_key)
+            movement = self.queue_movements.get(queue_key)
+            if approach is None or movement not in {"SR", "L"}:
+                continue
+            by_approach.setdefault(approach, {"SR": 0.0, "L": 0.0})[movement] += queue_value
+
+        imbalance = 0.0
+        for movement_queues in by_approach.values():
+            difference = abs(movement_queues.get("SR", 0.0) - movement_queues.get("L", 0.0))
+            imbalance += max(0.0, difference - self.lane_fairness_margin)
+        return imbalance / self.queue_scale
 
     def extract_features(
         self,
@@ -178,8 +231,8 @@ class ADPAgent:
         if 0 <= current_phase < self.num_phases:
             phase_features[current_phase] = 1.0
 
-        incident_direction_features = [0.0] * self.num_phases
-        if incident_direction is not None and 0 <= incident_direction < self.num_phases:
+        incident_direction_features = [0.0] * self.direction_count
+        if incident_direction is not None and 0 <= incident_direction < self.direction_count:
             incident_direction_features[incident_direction] = 1.0
 
         action_features = [0.0] * self.num_phases
@@ -210,23 +263,33 @@ class ADPAgent:
             / max(0.01, 1.0 - self.spillback_occupancy_threshold),
         )
 
+        selected_approaches = (
+            self.action_approaches[selected_action]
+            if 0 <= selected_action < len(self.action_approaches)
+            else []
+        )
         aligned_with_incident = (
             1.0
-            if incident_direction is not None and selected_action == incident_direction
+            if incident_direction is not None and incident_direction in selected_approaches
             else 0.0
         )
+        opposite_direction = (incident_direction + 2) % self.direction_count if incident_direction is not None else None
         opposite_incident = (
             1.0
-            if incident_direction is not None and selected_action == (incident_direction + 2) % self.num_phases
+            if opposite_direction is not None and opposite_direction in selected_approaches
             else 0.0
+        )
+        perpendicular_directions = (
+            {
+                (incident_direction + 1) % self.direction_count,
+                (incident_direction + 3) % self.direction_count,
+            }
+            if incident_direction is not None
+            else set()
         )
         perpendicular_incident = (
             1.0
-            if incident_direction is not None
-            and selected_action in {
-                (incident_direction + 1) % self.num_phases,
-                (incident_direction + 3) % self.num_phases,
-            }
+            if perpendicular_directions and any(direction in selected_approaches for direction in perpendicular_directions)
             else 0.0
         )
 
@@ -364,6 +427,131 @@ class ADPAgent:
         best_action = max(range(self.num_phases), key=lambda action: q_values[action])
         return best_action
 
+    def _served_queue_for_action(self, current_queues: Dict[str, float], action: int) -> float:
+        if not 0 <= action < len(self.action_edges):
+            return 0.0
+        return sum(current_queues.get(edge_id, 0.0) for edge_id in self.action_edges[action])
+
+    def _downstream_spillback_penalty(
+        self,
+        action: int,
+        downstream_queues: list[float] | None,
+        downstream_capacities: list[float] | None,
+    ) -> float:
+        downstream_queue = (
+            downstream_queues[action]
+            if downstream_queues and 0 <= action < len(downstream_queues)
+            else 0.0
+        )
+        downstream_capacity = (
+            downstream_capacities[action]
+            if downstream_capacities and 0 <= action < len(downstream_capacities)
+            else self.unbounded_downstream_capacity
+        )
+        downstream_capacity = max(1.0, downstream_capacity)
+        occupancy = downstream_queue / downstream_capacity
+        if occupancy <= self.spillback_occupancy_threshold:
+            return 0.0
+        return (occupancy - self.spillback_occupancy_threshold) / max(
+            0.01,
+            1.0 - self.spillback_occupancy_threshold,
+        )
+
+    def _estimate_residual_lookahead_values(
+        self,
+        current_queues: Dict[str, float],
+        baseline_queues: Dict[str, float],
+        tau: float,
+        current_phase: int,
+        dist_to_incident: float,
+        incident_direction: int | None,
+        time_discrete: int,
+        is_gridlock: bool,
+        incident_active: bool,
+        gamma: float,
+        incident_edges: list[str] | None,
+        action_pressures: list[float] | None,
+        downstream_queues: list[float] | None,
+        downstream_capacities: list[float] | None,
+        depth: int,
+    ) -> list[float]:
+        q_values = [float("-inf")] * self.num_phases
+        for action in range(self.num_phases):
+            predicted_queues = self.predict_next_queues(
+                current_queues,
+                action,
+                downstream_queues=downstream_queues,
+                downstream_capacities=downstream_capacities,
+                blocked_edges=incident_edges,
+            )
+            reward = self.calculate_reward(
+                predicted_queues,
+                baseline_queues,
+                tau,
+                current_phase,
+                action,
+                is_gridlock,
+                incident_edges=incident_edges,
+            )
+            features = self.extract_features(
+                current_queues,
+                current_phase,
+                dist_to_incident,
+                incident_direction,
+                time_discrete,
+                incident_active,
+                action=action,
+                action_pressures=action_pressures,
+                downstream_queues=downstream_queues,
+                downstream_capacities=downstream_capacities,
+            )
+            served_score = self._served_queue_for_action(current_queues, action) / self.queue_scale
+            pressure_score = (
+                action_pressures[action] / self.queue_scale
+                if action_pressures and 0 <= action < len(action_pressures)
+                else 0.0
+            )
+            learned_residual = self.get_value(features)
+            downstream_penalty = self._downstream_spillback_penalty(
+                action,
+                downstream_queues,
+                downstream_capacities,
+            )
+
+            q_value = (
+                reward
+                + self.residual_greedy_weight * served_score
+                + self.residual_pressure_weight * pressure_score
+                + self.residual_value_weight * learned_residual
+                - self.residual_downstream_penalty_weight * downstream_penalty
+            )
+            if depth > 1:
+                future_values = self._estimate_residual_lookahead_values(
+                    predicted_queues,
+                    baseline_queues,
+                    tau,
+                    action,
+                    dist_to_incident,
+                    incident_direction,
+                    time_discrete + 1,
+                    is_gridlock,
+                    incident_active,
+                    gamma,
+                    incident_edges,
+                    None,
+                    downstream_queues,
+                    downstream_capacities,
+                    depth - 1,
+                )
+                q_value += gamma * self.residual_lookahead_weight * max(future_values)
+
+            if math.isfinite(q_value):
+                q_values[action] = q_value
+
+        if all(value == float("-inf") for value in q_values):
+            return [0.0] * self.num_phases
+        return q_values
+
     def estimate_action_values(
         self,
         current_queues: Dict[str, float],
@@ -381,6 +569,25 @@ class ADPAgent:
         downstream_queues: list[float] | None = None,
         downstream_capacities: list[float] | None = None,
     ) -> list[float]:
+        if self.action_scoring_mode == "residual_lookahead":
+            return self._estimate_residual_lookahead_values(
+                current_queues,
+                baseline_queues,
+                tau,
+                current_phase,
+                dist_to_incident,
+                incident_direction,
+                time_discrete,
+                is_gridlock,
+                incident_active,
+                gamma,
+                incident_edges,
+                action_pressures,
+                downstream_queues,
+                downstream_capacities,
+                self.lookahead_depth,
+            )
+
         q_values = [float("-inf")] * self.num_phases
         best_action = 0
         max_q = float("-inf")

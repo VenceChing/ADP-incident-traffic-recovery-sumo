@@ -1,12 +1,18 @@
 import os
 import sys
 import subprocess
+import xml.etree.ElementTree as ET
 import uuid
 from typing import Union
 
-from .config import NETWORK_FILE
+from .config import NETWORK_FILE, ROUTE_HORIZON_TOLERANCE
 
 ROUTE_TMP_DIR = "route_tmp"
+
+
+def _console_safe(text: str) -> str:
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
 
 
 def cleanup_route_temp_files(route_file: str | None = None) -> None:
@@ -28,6 +34,31 @@ def cleanup_route_temp_files(route_file: str | None = None) -> None:
                 os.remove(path)
         except PermissionError:
             pass
+
+
+def get_route_horizon(route_file: str) -> float | None:
+    if not os.path.exists(route_file):
+        return None
+
+    max_depart: float | None = None
+    for _, element in ET.iterparse(route_file, events=("end",)):
+        if element.tag == "vehicle":
+            depart = element.get("depart")
+            try:
+                depart_time = float(depart) if depart is not None else None
+            except ValueError:
+                depart_time = None
+            if depart_time is not None:
+                max_depart = depart_time if max_depart is None else max(max_depart, depart_time)
+        element.clear()
+    return max_depart
+
+
+def route_file_covers_time(route_file: str, generate_time: float) -> bool:
+    horizon = get_route_horizon(route_file)
+    if horizon is None:
+        return False
+    return horizon + ROUTE_HORIZON_TOLERANCE >= generate_time
 
 
 def generate_routes(insertion_rate: Union[int, float], generate_time: int, route_file: str) -> str:
@@ -61,13 +92,24 @@ def generate_routes(insertion_rate: Union[int, float], generate_time: int, route
     ]
 
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
     except subprocess.CalledProcessError as exc:
         if not os.path.exists(output_route_file) or os.path.getsize(output_route_file) == 0:
             if exc.stderr:
-                print(exc.stderr)
+                print(_console_safe(exc.stderr))
             raise
-        detail = exc.stderr.strip().splitlines()[-1] if exc.stderr else "unknown post-write error"
+        detail = (
+            _console_safe(exc.stderr.strip().splitlines()[-1])
+            if exc.stderr
+            else "unknown post-write error"
+        )
         print(
             "WARNING: randomTrips.py failed after writing the route file; "
             f"using generated routes from {output_route_file}. Detail: {detail}"
