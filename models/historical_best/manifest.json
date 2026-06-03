@@ -1,0 +1,14 @@
+{
+  "name": "historical_best_rate2500_switch0.04_queue2_alpha0.0005_td10",
+  "source": "SUMO/grid_4x4/results_validation/rate2500_switch0.04_queue2_alpha0.0005_td10/adp_agent_weights.json",
+  "rate": 2500,
+  "switch_penalty_scale": 0.04,
+  "adp_queue_priority_weight": 2.0,
+  "alpha": 0.0005,
+  "td_error_cap": 10.0,
+  "decision_interval": 10,
+  "queue_scale": 50.0,
+  "distance_scale": 6.0,
+  "time_scale": 120.0,
+  "intended_preset": "configs/historical_best.yaml"
+}

@@ -1,0 +1,2 @@
+[console_scripts]
+its-signal-control = its_signal_control.cli:main

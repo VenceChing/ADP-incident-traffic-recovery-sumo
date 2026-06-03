@@ -1,0 +1,26 @@
+RATE: 6000
+ROUTE_FILE_PREFIX: "grid_4x4_3lane"
+SCENARIO_DIR: "scenarios/grid_4x4_3lane"
+SUMO_CONFIG: "sim.sumocfg"
+NETWORK_FILE: "grid_4x4_3lane.net.xml"
+ACTION_SPACE: "three_lane_8"
+USE_GUI: false
+RENDER_STRESS: false
+REGENERATE_ROUTES: false
+RUN_SINGLE_DEMO: false
+RUN_TRAINING: false
+RUN_EVALUATION: true
+LOAD_WEIGHTS_FOR_EVALUATION: true
+EVALUATION_CONTROLLERS: ["fixed_time_rr", "greedy", "max_pressure", "adp_eval"]
+RESULTS_DIR: "../../outputs/runs/three_lane_evaluation_incident_features"
+WEIGHTS_PATH: "../../outputs/runs/three_lane_training_full_incident_features/adp_agent_weights.json"
+EVAL_EPISODES_PER_CONTROLLER: 24
+TIME: 1800
+SWITCH_PENALTY_SCALE: 0.04
+ADP_VARIANT_LABEL: "three_lane_8_incident_action_features_v2"
+ADP_INCIDENT_ACTION_FEATURES_ENABLED: true
+ADP_QUEUE_PRIORITY_WEIGHT: 2.0
+ADP_LANE_FAIRNESS_WEIGHT: 0.10
+ADP_LANE_FAIRNESS_MARGIN: 5.0
+ALPHA: 0.0005
+ADP_MAX_ABS_TD_ERROR: 10.0

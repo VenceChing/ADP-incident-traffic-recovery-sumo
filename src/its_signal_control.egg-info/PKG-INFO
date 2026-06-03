@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: its-signal-control
+Version: 0.1.0
+Summary: Incident-aware decentralized ADP traffic signal control experiments for SUMO.
+Requires-Python: >=3.10
+License-File: LICENSE
+Requires-Dist: traci>=1.20.0
+Requires-Dist: sumolib>=1.20.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Dynamic: license-file
