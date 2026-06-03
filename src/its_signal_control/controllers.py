@@ -195,6 +195,10 @@ def select_adp_action(
     incident_edges: list[str],
     epsilon: float,
     context: dict[str, Any],
+    neighbor_ids: list[str] | None = None,
+    neighbor_actions: dict[str, int] | None = None,
+    neighbor_phases: dict[str, int] | None = None,
+    neighbor_queues: dict[str, float] | None = None,
 ) -> tuple[int, list[float]]:
     incident_active = sim_time >= INCIDENT_TIME
     dist_to_incident = get_incident_distance(agent_id, incident_edges)
@@ -224,6 +228,10 @@ def select_adp_action(
         downstream_queues=downstream_queues,
         downstream_capacities=downstream_capacities,
         incident_action_features=incident_action_features,
+        neighbor_ids=neighbor_ids,
+        neighbor_actions=neighbor_actions,
+        neighbor_phases=neighbor_phases,
+        neighbor_queues=neighbor_queues,
     )
     action = agent.select_action(
         current_queues,
@@ -242,6 +250,10 @@ def select_adp_action(
         downstream_queues=downstream_queues,
         downstream_capacities=downstream_capacities,
         incident_action_features=incident_action_features,
+        neighbor_ids=neighbor_ids,
+        neighbor_actions=neighbor_actions,
+        neighbor_phases=neighbor_phases,
+        neighbor_queues=neighbor_queues,
     )
     return action, q_values
 
@@ -256,7 +268,9 @@ def update_adp_agents(
     incident_edges: list[str],
     is_gridlock: bool,
     context: dict[str, Any],
+    neighbor_info: dict[str, tuple[list[str], dict[str, int], dict[str, int], dict[str, float]]] | None = None,
 ) -> None:
+    neighbor_info = neighbor_info or {}
     for agent_id, agent in agents.items():
         incident_active = sim_time >= INCIDENT_TIME
         next_queues = get_agent_queues(env, agent_id, sim_time, incident_edges, context)
@@ -270,6 +284,10 @@ def update_adp_agents(
             incident_edges,
             incident_active,
             context,
+        )
+        neighbor_ids, neighbor_actions, neighbor_phases, neighbor_queues = neighbor_info.get(
+            agent_id,
+            ([], {}, {}, {}),
         )
         reward = agent.calculate_reward(
             next_queues,
@@ -301,6 +319,10 @@ def update_adp_agents(
                     downstream_queues=downstream_queues,
                     downstream_capacities=downstream_capacities,
                     incident_action_features=incident_action_features,
+                    neighbor_ids=neighbor_ids,
+                    neighbor_actions=neighbor_actions,
+                    neighbor_phases=neighbor_phases,
+                    neighbor_queues=neighbor_queues,
                 )
             ),
         )
@@ -316,6 +338,10 @@ def update_adp_agents(
             downstream_queues=downstream_queues,
             downstream_capacities=downstream_capacities,
             incident_action_features=incident_action_features,
+            neighbor_ids=neighbor_ids,
+            neighbor_actions=neighbor_actions,
+            neighbor_phases=neighbor_phases,
+            neighbor_queues=neighbor_queues,
         )
         agent.update_weights(
             step_cache[agent_id]["features"],
@@ -324,3 +350,42 @@ def update_adp_agents(
             ALPHA,
             GAMMA,
         )
+
+
+class DecisionCache:
+    """Per-cycle cache of earlier decisions for later neighboring agents."""
+
+    def __init__(self) -> None:
+        self.actions: dict[str, int] = {}
+        self.phases: dict[str, int] = {}
+        self.queues: dict[str, float] = {}
+
+    def cache_decision(
+        self,
+        agent_id: str,
+        action: int,
+        current_phase: int,
+        total_queue: float,
+    ) -> None:
+        self.actions[agent_id] = action
+        self.phases[agent_id] = current_phase
+        self.queues[agent_id] = total_queue
+
+    def get_neighbor_info(
+        self,
+        neighbors: list[str],
+    ) -> tuple[dict[str, int], dict[str, int], dict[str, float]]:
+        neighbor_actions: dict[str, int] = {}
+        neighbor_phases: dict[str, int] = {}
+        neighbor_queues: dict[str, float] = {}
+        for neighbor_id in neighbors:
+            if neighbor_id in self.actions:
+                neighbor_actions[neighbor_id] = self.actions[neighbor_id]
+                neighbor_phases[neighbor_id] = self.phases[neighbor_id]
+                neighbor_queues[neighbor_id] = self.queues[neighbor_id]
+        return neighbor_actions, neighbor_phases, neighbor_queues
+
+    def clear(self) -> None:
+        self.actions.clear()
+        self.phases.clear()
+        self.queues.clear()

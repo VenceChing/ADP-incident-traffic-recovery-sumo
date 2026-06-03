@@ -28,9 +28,13 @@ class DecisionOrderSchedule:
     VALID_STRATEGIES = {
         "unified",
         "distance_decay",
+        "incident_manhattan_distance_decay",
+        "incident_manhattan_distance_premium",
         "checkerboard",
         "ring",
         "greedy_dynamic",
+        "queue_length_decay",
+        "queue_length_premium",
         "random",
     }
 
@@ -54,10 +58,12 @@ class DecisionOrderSchedule:
         self._static_order = self._build_static_order()
 
     def _build_static_order(self) -> list[str]:
-        if self.strategy in {"unified", "greedy_dynamic"}:
+        if self.strategy in {"unified", "greedy_dynamic", "queue_length_decay", "queue_length_premium"}:
             return list(self.agent_ids)
-        if self.strategy == "distance_decay":
-            return self._distance_decay_order()
+        if self.strategy in {"distance_decay", "incident_manhattan_distance_decay"}:
+            return self._incident_manhattan_order(farthest_first=True)
+        if self.strategy == "incident_manhattan_distance_premium":
+            return self._incident_manhattan_order(farthest_first=False)
         if self.strategy == "checkerboard":
             return self._checkerboard_order()
         if self.strategy == "ring":
@@ -73,6 +79,10 @@ class DecisionOrderSchedule:
     ) -> list[str]:
         if self.strategy == "greedy_dynamic" and current_queues is not None:
             return self._greedy_dynamic_order(current_queues)
+        if self.strategy == "queue_length_decay" and current_queues is not None:
+            return self._queue_length_order(current_queues, longest_first=False)
+        if self.strategy == "queue_length_premium" and current_queues is not None:
+            return self._queue_length_order(current_queues, longest_first=True)
         return list(self._static_order)
 
     def _agent_coords(self, agent_id: str) -> tuple[int, int] | None:
@@ -112,13 +122,18 @@ class DecisionOrderSchedule:
                 distances.append(abs(x - ex) + abs(y - ey))
         return min(distances) if distances else 0.0
 
-    def _distance_decay_order(self) -> list[str]:
+    def _incident_manhattan_order(self, *, farthest_first: bool) -> list[str]:
         indexed_agents = list(enumerate(self.agent_ids))
         return [
             agent_id
             for _, agent_id in sorted(
                 indexed_agents,
-                key=lambda item: (-self._distance_to_incident(item[1]), item[0]),
+                key=lambda item: (
+                    -self._distance_to_incident(item[1])
+                    if farthest_first
+                    else self._distance_to_incident(item[1]),
+                    item[0],
+                ),
             )
         ]
 
@@ -169,6 +184,14 @@ class DecisionOrderSchedule:
         self,
         current_queues: dict[str, dict[str, float] | float],
     ) -> list[str]:
+        return self._queue_length_order(current_queues, longest_first=True)
+
+    def _queue_length_order(
+        self,
+        current_queues: dict[str, dict[str, float] | float],
+        *,
+        longest_first: bool,
+    ) -> list[str]:
         original_index = {agent_id: index for index, agent_id in enumerate(self.agent_ids)}
 
         def total_queue(agent_id: str) -> float:
@@ -179,7 +202,10 @@ class DecisionOrderSchedule:
 
         return sorted(
             self.agent_ids,
-            key=lambda agent_id: (-total_queue(agent_id), original_index[agent_id]),
+            key=lambda agent_id: (
+                -total_queue(agent_id) if longest_first else total_queue(agent_id),
+                original_index[agent_id],
+            ),
         )
 
     def get_neighbors(self, agent_id: str) -> list[str]:

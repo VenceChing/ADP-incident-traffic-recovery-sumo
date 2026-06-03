@@ -315,39 +315,39 @@ def render_line_chart(path: str, rows: list[dict[str, str]], title: str, panels:
     if not rows:
         return
     width = 1200
-    panel_height = 170
+    panel_height = 190
     left = 80
-    right = 30
-    top = 45
-    gap = 34
-    height = top + len(panels) * panel_height + (len(panels) - 1) * gap + 45
+    right = 145
+    top = 62
+    gap = 42
+    height = top + len(panels) * panel_height + (len(panels) - 1) * gap + 72
     plot_width = width - left - right
-    colors = {
-        "queue_excess_area": "#2563eb",
-        "avg_queue_excess": "#0f766e",
-        "duration_after_incident": "#dc2626",
-        "ttr": "#16a34a",
-        "throughput_recovery_ratio": "#f59e0b",
-        "final_halting_ratio": "#7c3aed",
-        "total_l1_delta": "#0891b2",
+    controller_colors = {
+        "adp_eval": "#2563eb",
+        "adp_train": "#2563eb",
+        "fixed_time_rr": "#64748b",
+        "fixed_time": "#64748b",
+        "greedy": "#16a34a",
+        "max_pressure": "#f59e0b",
     }
+    controllers = list(dict.fromkeys(row.get("controller", "") for row in rows))
+    episode_labels = sorted(
+        {row.get("episode", str(idx)) for idx, row in enumerate(rows)},
+        key=lambda value: int(value) if str(value).isdigit() else str(value),
+    )
+    episode_index = {episode: idx for idx, episode in enumerate(episode_labels)}
 
-    def x_at(index: int) -> float:
-        if len(rows) == 1:
+    def x_at(episode: str) -> float:
+        if len(episode_labels) == 1:
             return left + plot_width / 2
-        return left + plot_width * index / (len(rows) - 1)
+        return left + plot_width * episode_index[episode] / (len(episode_labels) - 1)
 
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="white"/>',
+        '<style>text{font-family:Arial,sans-serif}.axis{fill:#64748b;font-size:11px}.label{fill:#334155;font-size:12px}.title{fill:#0f172a;font-size:14px;font-weight:700}</style>',
         f'<text x="{left}" y="24" font-family="Arial" font-size="18" font-weight="700">{title}</text>',
     ]
-    for idx, row in enumerate(rows):
-        fill = {"SUCCESS": "#22c55e", "GRIDLOCK": "#ef4444", "TIMEOUT": "#64748b"}.get(
-            row.get("status", ""),
-            "#94a3b8",
-        )
-        svg.append(f'<circle cx="{x_at(idx):.1f}" cy="32" r="4" fill="{fill}"/>')
 
     for panel_idx, (panel_title, keys) in enumerate(panels):
         y0 = top + panel_idx * (panel_height + gap)
@@ -361,35 +361,52 @@ def render_line_chart(path: str, rows: list[dict[str, str]], title: str, panels:
 
         svg.extend(
             [
-                f'<text x="{left}" y="{y0 - 10}" font-family="Arial" font-size="14" font-weight="700">{panel_title}</text>',
+                f'<text x="{left}" y="{y0 - 16}" class="title">{panel_title}</text>',
                 f'<line x1="{left}" y1="{y1}" x2="{width - right}" y2="{y1}" stroke="#cbd5e1"/>',
                 f'<line x1="{left}" y1="{y0}" x2="{left}" y2="{y1}" stroke="#cbd5e1"/>',
-                f'<text x="10" y="{y1}" font-family="Arial" font-size="11" fill="#64748b">0</text>',
-                f'<text x="10" y="{y0 + 10}" font-family="Arial" font-size="11" fill="#64748b">{max_value:.2f}</text>',
+                f'<text x="10" y="{y1}" class="axis">0</text>',
+                f'<text x="10" y="{y0 + 10}" class="axis">{max_value:.2f}</text>',
             ]
         )
         for key in keys:
-            points = []
-            for idx, row in enumerate(rows):
-                value = metric_float(row, key)
-                x = x_at(idx)
-                y = y1 - (value / max_value) * panel_height
-                points.append(f"{x:.1f},{y:.1f}")
-            svg.append(
-                f'<polyline points="{" ".join(points)}" fill="none" '
-                f'stroke="{colors.get(key, "#334155")}" stroke-width="2"/>'
-            )
-        legend_x = left + 10
-        for key in keys:
-            svg.append(
-                f'<rect x="{legend_x}" y="{y0 + 10}" width="10" height="10" '
-                f'fill="{colors.get(key, "#334155")}"/>'
-            )
-            svg.append(
-                f'<text x="{legend_x + 15}" y="{y0 + 20}" font-family="Arial" '
-                f'font-size="11" fill="#334155">{key}</text>'
-            )
-            legend_x += 220
+            for controller in controllers:
+                controller_rows = [
+                    row
+                    for row in rows
+                    if row.get("controller", "") == controller and row.get(key, "") != ""
+                ]
+                controller_rows.sort(
+                    key=lambda row: episode_index.get(row.get("episode", ""), 0)
+                )
+                points = []
+                for row in controller_rows:
+                    value = metric_float(row, key)
+                    x = x_at(row.get("episode", ""))
+                    y = y1 - (value / max_value) * panel_height
+                    points.append(f"{x:.1f},{y:.1f}")
+                if len(points) >= 2:
+                    svg.append(
+                        f'<polyline points="{" ".join(points)}" fill="none" '
+                        f'stroke="{controller_colors.get(controller, "#334155")}" stroke-width="2.5"/>'
+                    )
+                for row in controller_rows:
+                    fill = {"SUCCESS": "#22c55e", "GRIDLOCK": "#ef4444", "TIMEOUT": "#64748b"}.get(
+                        row.get("status", ""),
+                        "#94a3b8",
+                    )
+                    value = metric_float(row, key)
+                    svg.append(
+                        f'<circle cx="{x_at(row.get("episode", "")):.1f}" '
+                        f'cy="{y1 - (value / max_value) * panel_height:.1f}" r="3.5" '
+                        f'fill="{fill}" stroke="{controller_colors.get(controller, "#334155")}" stroke-width="1"/>'
+                    )
+        legend_x = left
+        legend_y = y1 + 24
+        for controller in controllers:
+            color = controller_colors.get(controller, "#334155")
+            svg.append(f'<line x1="{legend_x}" y1="{legend_y}" x2="{legend_x + 22}" y2="{legend_y}" stroke="{color}" stroke-width="3"/>')
+            svg.append(f'<text x="{legend_x + 28}" y="{legend_y + 4}" class="label">{controller}</text>')
+            legend_x += 150
 
     svg.append("</svg>")
     with open(path, "w", encoding="utf-8") as handle:

@@ -74,6 +74,7 @@ def test_three_lane_compact_residual_long_training_preset_reduces_features() -> 
 def test_decision_order_defaults_to_unified() -> None:
     assert config.DECISION_ORDER_STRATEGY == "unified"
     assert config.DECISION_ORDER_RANDOM_SEED == 42
+    assert config.ALLOW_NEIGHBOR_INFO is False
 
 
 def test_three_lane_decision_order_presets_enable_distance_decay() -> None:
@@ -88,9 +89,78 @@ def test_three_lane_decision_order_presets_enable_distance_decay() -> None:
     assert smoke_preset["DECISION_ORDER_STRATEGY"] == "distance_decay"
     assert train_preset["DECISION_ORDER_STRATEGY"] == "distance_decay"
     assert eval_preset["DECISION_ORDER_STRATEGY"] == "distance_decay"
+    assert demo_preset["ALLOW_NEIGHBOR_INFO"] is True
+    assert smoke_preset["ALLOW_NEIGHBOR_INFO"] is True
+    assert train_preset["ALLOW_NEIGHBOR_INFO"] is True
+    assert eval_preset["ALLOW_NEIGHBOR_INFO"] is True
     assert train_preset["TRAIN_EPISODES"] == 50
     assert eval_preset["EVAL_EPISODES_PER_CONTROLLER"] == 24
     assert train_preset["ADP_FEATURE_SET"] == "compact_residual"
+
+
+def test_three_lane_new_decision_order_strategy_presets_load() -> None:
+    cases = [
+        (
+            "configs/three_lane_training_20_decision_order_incident_manhattan_decay.yaml",
+            "configs/three_lane_evaluation_10_decision_order_incident_manhattan_decay.yaml",
+            "incident_manhattan_distance_decay",
+        ),
+        (
+            "configs/three_lane_training_20_decision_order_incident_manhattan_premium.yaml",
+            "configs/three_lane_evaluation_10_decision_order_incident_manhattan_premium.yaml",
+            "incident_manhattan_distance_premium",
+        ),
+        (
+            "configs/three_lane_training_20_decision_order_queue_length_decay.yaml",
+            "configs/three_lane_evaluation_10_decision_order_queue_length_decay.yaml",
+            "queue_length_decay",
+        ),
+        (
+            "configs/three_lane_training_20_decision_order_queue_length_premium.yaml",
+            "configs/three_lane_evaluation_10_decision_order_queue_length_premium.yaml",
+            "queue_length_premium",
+        ),
+    ]
+
+    for train_path, eval_path, strategy in cases:
+        train_preset = config.load_preset(Path(train_path))
+        eval_preset = config.load_preset(Path(eval_path))
+        assert train_preset["TRAIN_EPISODES"] == 20
+        assert eval_preset["EVAL_EPISODES_PER_CONTROLLER"] == 10
+        assert train_preset["DECISION_ORDER_STRATEGY"] == strategy
+        assert eval_preset["DECISION_ORDER_STRATEGY"] == strategy
+        assert train_preset["ALLOW_NEIGHBOR_INFO"] is True
+        assert eval_preset["ALLOW_NEIGHBOR_INFO"] is True
+
+
+def test_three_lane_top3_decision_order_presets_load() -> None:
+    cases = [
+        (
+            "configs/three_lane_training_20_decision_order_checkerboard.yaml",
+            "configs/three_lane_evaluation_10_decision_order_checkerboard.yaml",
+            "checkerboard",
+        ),
+        (
+            "configs/three_lane_training_20_decision_order_random.yaml",
+            "configs/three_lane_evaluation_10_decision_order_random.yaml",
+            "random",
+        ),
+        (
+            "configs/three_lane_training_20_decision_order_distance_decay.yaml",
+            "configs/three_lane_evaluation_10_decision_order_distance_decay.yaml",
+            "distance_decay",
+        ),
+    ]
+
+    for train_path, eval_path, strategy in cases:
+        train_preset = config.load_preset(Path(train_path))
+        eval_preset = config.load_preset(Path(eval_path))
+        assert train_preset["TRAIN_EPISODES"] == 20
+        assert eval_preset["EVAL_EPISODES_PER_CONTROLLER"] == 10
+        assert train_preset["DECISION_ORDER_STRATEGY"] == strategy
+        assert eval_preset["DECISION_ORDER_STRATEGY"] == strategy
+        assert train_preset["ALLOW_NEIGHBOR_INFO"] is True
+        assert eval_preset["ALLOW_NEIGHBOR_INFO"] is True
 
 
 def test_two_lane_residual_training_preset_enables_residual_lookahead() -> None:

@@ -241,3 +241,123 @@ def test_compact_residual_feature_set_drops_redundant_phase_and_direction_featur
     assert features[:4] == [0.2, 0.4, 0.6, 0.8]
     assert features[4:6] == [0.0, 1.0]
     assert features[-6:] == [1.0, 0.5, 0.25, 2.0, 1.0, 0.5]
+
+
+def test_neighbor_features_extend_feature_dim_and_keep_stable_slots() -> None:
+    agent = ADPAgent(
+        "B2",
+        incoming_edges=["north", "east"],
+        action_edges=[["north"], ["east"]],
+        num_phases=2,
+        feature_set="compact_residual",
+        neighbor_feature_max_neighbors=4,
+        queue_scale=50.0,
+    )
+
+    features = agent.extract_features(
+        {"north": 10.0, "east": 20.0},
+        current_phase=0,
+        dist_to_incident=1,
+        incident_direction=0,
+        time_discrete=0,
+        incident_active=True,
+        action=1,
+        neighbor_ids=["A2", "B1"],
+        neighbor_actions={"B1": 1},
+        neighbor_phases={"B1": 0},
+        neighbor_queues={"B1": 25.0},
+    )
+
+    expected_neighbor_dim = 4 * (2 * agent.num_phases + 4)
+    assert agent.neighbor_feature_count == expected_neighbor_dim
+    assert len(features) == agent.feature_dim
+
+    tail_start = agent.feature_dim - agent.neighbor_feature_count
+    phase_offset = tail_start + 4 * agent.num_phases
+    queue_offset = phase_offset + 4 * agent.num_phases
+    same_action_offset = queue_offset + 4
+    queue_same_action_offset = same_action_offset + 8
+
+    assert features[tail_start : tail_start + 4] == [0.0, 0.0, 0.0, 1.0]
+    assert features[phase_offset : phase_offset + 4] == [0.0, 0.0, 1.0, 0.0]
+    assert features[queue_offset : queue_offset + 2] == [0.0, 0.5]
+    assert features[same_action_offset : same_action_offset + 2] == [0.0, 1.0]
+    assert features[queue_same_action_offset : queue_same_action_offset + 2] == [0.0, 0.5]
+
+
+def test_neighbor_interaction_weight_can_change_action_ranking() -> None:
+    agent = ADPAgent(
+        "B2",
+        incoming_edges=["north", "east"],
+        action_edges=[["north"], ["east"]],
+        num_phases=2,
+        action_scoring_mode="heuristic_residual",
+        residual_value_weight=1.0,
+        queue_priority_weight=0.0,
+        total_queue_weight=0.0,
+        neighbor_feature_max_neighbors=1,
+    )
+    same_action_offset = agent.feature_dim - agent.neighbor_feature_count + 2 * agent.num_phases + 1
+    agent.weights[same_action_offset] = 5.0
+
+    q_values = agent.estimate_action_values(
+        {"north": 10.0, "east": 10.0},
+        {"north": 0.0, "east": 0.0},
+        tau=1.1,
+        current_phase=0,
+        dist_to_incident=1,
+        incident_direction=0,
+        time_discrete=0,
+        is_gridlock=False,
+        incident_active=True,
+        gamma=0.95,
+        neighbor_ids=["B1"],
+        neighbor_actions={"B1": 0},
+        neighbor_phases={"B1": 0},
+        neighbor_queues={"B1": 5.0},
+    )
+
+    assert q_values[0] > q_values[1]
+
+
+def test_zero_weight_adp_queue_prediction_uses_neighbor_decisions() -> None:
+    agent = ADPAgent(
+        "B2",
+        incoming_edges=["north", "east"],
+        action_edges=[["north"], ["east"]],
+        num_phases=2,
+        queue_priority_weight=0.0,
+        total_queue_weight=0.1,
+        neighbor_feature_max_neighbors=1,
+    )
+
+    without_neighbor = agent.estimate_action_values(
+        {"north": 10.0, "east": 10.0},
+        {"north": 0.0, "east": 0.0},
+        tau=1.1,
+        current_phase=0,
+        dist_to_incident=1,
+        incident_direction=0,
+        time_discrete=0,
+        is_gridlock=False,
+        incident_active=True,
+        gamma=0.95,
+    )
+    with_neighbor = agent.estimate_action_values(
+        {"north": 10.0, "east": 10.0},
+        {"north": 0.0, "east": 0.0},
+        tau=1.1,
+        current_phase=0,
+        dist_to_incident=1,
+        incident_direction=0,
+        time_discrete=0,
+        is_gridlock=False,
+        incident_active=True,
+        gamma=0.95,
+        neighbor_ids=["B1"],
+        neighbor_actions={"B1": 1},
+        neighbor_phases={"B1": 1},
+        neighbor_queues={"B1": 30.0},
+    )
+
+    assert with_neighbor != without_neighbor

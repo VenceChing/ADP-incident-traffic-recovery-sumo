@@ -512,6 +512,9 @@ def build_agents(tls_ids: list[str], context: dict[str, Any] | None = None) -> d
                 if ADP_INCIDENT_ACTION_FEATURES_ENABLED and ACTION_SPACE == "three_lane_8"
                 else 0
             ),
+            neighbor_feature_max_neighbors=(
+                ADP_NEIGHBOR_FEATURE_MAX_NEIGHBORS if ALLOW_NEIGHBOR_INFO else 0
+            ),
         )
 
     return agents

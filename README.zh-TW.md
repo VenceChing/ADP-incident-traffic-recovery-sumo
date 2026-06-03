@@ -1,187 +1,265 @@
-# 事故誘發壅塞之 Dec-MDP / ADP 號誌控制系統
+# Traffic ADP SUMO Final 使用說明
 
-English README: [README.md](README.md)
+這是最終版 3-lane SUMO incident-recovery controller。主要新增功能是 **neighbor-aware Decision Order ADP**：每個 control cycle 內，agent 依照指定順序決策，後決策的 agent 可以讀取先決策鄰居的 action、phase 與 queue。
 
-本專案使用 SUMO 建立 4x4 路網事故情境，並以去中心化 Markov 決策流程（Dec-MDP）與近似動態規劃（ADP）控制各路口號誌。預設版本保留目前歷史最佳設定與權重，可直接重現 `RATE=2500` 的評估結果，同時把原本混在一起的程式、設定、模型、場景與輸出資料分開管理。
+## 最終選定方法
 
-## 專案簡介與架構說明
+本 repo 最後保留兩個主要方法：
+
+1. **Checkerboard Decision Order + neighbor-aware ADP checkpoint 20**  
+   主要 trained method。使用 ADP residual 權重。
+
+2. **Random Decision Order + neighbor-aware zero-weight ADP**  
+   強 ablation / 輕量方法。不使用訓練權重。
+
+主要權重檔：
 
 ```text
-configs/                      實驗 preset，包含 historical_best、training、evaluation、smoke
-models/historical_best/        預設 ADP 權重與 manifest
-scenarios/grid_4x4/            可重現的 SUMO 路網、路徑與 GUI 設定
-src/its_signal_control/        核心 Python 套件
-scripts/                       一鍵重現、訓練、評估、OSM 匯入腳本
-tests/                         不依賴 SUMO GUI 的核心單元測試
-outputs/                       執行時產生的 metrics、圖表、權重與 step logs
+models/main_methods/checkerboard_neighbor_adp_checkpoint_0020.json
 ```
 
-核心模組分工如下：
+Random zero 沒有權重檔，因為它刻意使用 zero weights。
 
-- `agent.py`：ADP agent、特徵抽取、線性 value function、reward、transition heuristic。
-- `experiment.py`：episode loop、訓練與評估流程。
-- `controllers.py`：`fixed_time_rr`、`greedy`、`max_pressure`、`adp_eval` 控制器。
-- `traffic_model.py`：SUMO 啟動參數、事故候選、路口幾何、成功與 gridlock 判定。
-- `metrics.py`：CSV metrics、summary、paired comparison、權重讀寫。
-- `routing.py`、`analysis.py`、`maps.py`、`features.py`、`decision_intervals.py`：為後續擴充保留的穩定邊界。
+## 實作重點
 
-## 環境安裝指南
+這個 final version 不是只把 agent 的迴圈順序換掉，而是讓 Decision Order 真的影響後續 agent 的輸入資訊。
 
-需求：
+每個 control cycle 的流程：
 
-- Python 3.10+
-- SUMO 1.20+，需包含 `sumo`、`sumo-gui`、`netconvert`、`randomTrips.py`
-- Windows PowerShell 或 Bash
+1. `DecisionOrderSchedule` 產生 agent 順序。
+2. agent 依照順序逐一決策。
+3. 如果 `ALLOW_NEIGHBOR_INFO: true`，agent 會讀取同一 cycle 中已經決策的 4-connected neighbors。
+4. 讀到的資訊包含 neighbor action、phase、queue。
+5. agent 決策後，把自己的 action、phase、total queue 寫入 `DecisionCache`。
+6. 下一個較晚決策的鄰居就能把這些資訊當成 features。
+7. 每個 control cycle 結束後清空 cache。
 
-Windows PowerShell 範例：
+預設仍然保持原本行為：
+
+```yaml
+DECISION_ORDER_STRATEGY: "unified"
+ALLOW_NEIGHBOR_INFO: false
+```
+
+因此只有 final presets 或其他明確啟用的 config 會使用 Decision Order + neighbor features。
+
+## Final Config 主要參數
+
+兩個選定方法與三個 baseline 使用相同的 3-lane evaluation setup：
+
+| Parameter | Value |
+|---|---|
+| `SCENARIO_DIR` | `scenarios/grid_4x4_3lane` |
+| `SUMO_CONFIG` | `sim.sumocfg` |
+| `NETWORK_FILE` | `grid_4x4_3lane.net.xml` |
+| `ROUTE_FILE_PREFIX` | `grid_4x4_3lane` |
+| `RATE` | `6000` |
+| `ACTION_SPACE` | `three_lane_8` |
+| `EVAL_EPISODES_PER_CONTROLLER` | `24` |
+| `TIME` | `1800` |
+| `USE_GUI` | `false` |
+| `REGENERATE_ROUTES` | `false` |
+
+ADP 方法設定：
+
+| Parameter | Checkerboard ckpt 20 | Random zero |
+|---|---|---|
+| Config | `configs/final_eval_checkerboard_neighbor_adp_ckpt20.yaml` | `configs/final_eval_random_zero.yaml` |
+| Controller | `adp_eval` | `adp_eval` |
+| Load weights | `true` | `false` |
+| Weight path | `models/main_methods/checkerboard_neighbor_adp_checkpoint_0020.json` | 無 |
+| Decision order | `checkerboard` | `random` |
+| Neighbor info | `true` | `true` |
+| Action scoring | `heuristic_residual` | `heuristic_residual` |
+| Feature set | `compact_residual` | `compact_residual` |
+| Incident-action features | `true` | `true` |
+| Queue priority weight | `2.0` | `2.0` |
+| Lane fairness weight | `0.10` | `0.10` |
+| Residual value weight | `0.05` | `0.05` |
+
+Baseline 設定：
+
+| Baseline | Config | Controller | Decision order | Neighbor info |
+|---|---|---|---|---|
+| Greedy | `configs/final_eval_greedy_baseline.yaml` | `greedy` | `unified` | `false` |
+| Max pressure | `configs/final_eval_max_pressure_baseline.yaml` | `max_pressure` | `unified` | `false` |
+| Fixed time | `configs/final_eval_fixed_time_baseline.yaml` | `fixed_time_rr` | `unified` | `false` |
+
+## 最終結果
+
+| Method | Success | TTR | Queue excess | Throughput recovery |
+|---|---:|---:|---:|---:|
+| Checkerboard ckpt 20 | 79.17% | 417.3 | 18,209 | 1.164 |
+| Random zero | 79.17% | 388.3 | 18,249 | 1.143 |
+| Greedy | 70.83% | 408.6 | 20,462 | 1.149 |
+| Max pressure | 50.00% | 419.1 | 30,815 | 1.059 |
+| Fixed time | 0.00% | n/a | 69,305 | 0.919 |
+
+最終圖表與 CSV：
+
+```text
+outputs/runs/selected_methods_vs_baselines/combined_summary.csv
+outputs/runs/selected_methods_vs_baselines/pairwise_vs_greedy.csv
+outputs/runs/selected_methods_vs_baselines/selected_methods_vs_baselines_horizontal_v2.svg
+```
+
+和 greedy 的 paired comparison：
+
+| Method | Queue excess minus greedy | Queue wins | Successes | TTR minus greedy |
+|---|---:|---:|---:|---:|
+| Checkerboard ckpt 20 | -2,253 | 17/24 | 19/24 | -15.3 |
+| Random zero | -2,213 | 17/24 | 19/24 | -35.8 |
+| Max pressure | +10,353 | 3/24 | 12/24 | +35.5 |
+| Fixed time | +48,843 | 0/24 | 0/24 | n/a |
+
+## 環境設定
+
+需要：
+
+- Python project dependencies
+- SUMO
+- `SUMO_HOME`
+- `PYTHONPATH` 包含 `src` 與 SUMO tools
+
+PowerShell：
 
 ```powershell
-cd D:\Projects\AI\Final\traffic-adp-sumo
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-
-$env:SUMO_HOME = "C:\Program Files (x86)\Eclipse\Sumo"
-$env:Path = "$env:SUMO_HOME\bin;$env:Path"
-$env:PYTHONPATH = "$PWD\src;$env:PYTHONPATH"
+cd D:\Projects\AI\Final\traffic-adp-sumo-final
+$env:PYTHONPATH = "$PWD\src;$env:SUMO_HOME\tools"
 ```
 
-Linux/macOS 範例：
+## 執行最終評估
 
-```bash
-cd traffic-adp-sumo
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+每個 command 會輸出到 preset 裡設定的 `RESULTS_DIR`。如果要平行跑，可以開多個 PowerShell terminal，各自設定 `PYTHONPATH` 後執行。
 
-export SUMO_HOME=/path/to/sumo
-export PATH="$SUMO_HOME/bin:$PATH"
-export PYTHONPATH="$PWD/src:${PYTHONPATH:-}"
-```
-
-## 快速重現現有最佳結果
-
-預設重現使用：
-
-- `configs/historical_best.yaml`
-- `models/historical_best/adp_agent_weights.json`
-- `scenarios/grid_4x4/grid_4x4_rate2500.rou.xml`
-- headless SUMO，輸出到 `outputs/runs/historical_best/`
-
-Windows：
+Checkerboard trained main method：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\reproduce_best.ps1
-```
-
-跨平台：
-
-```bash
-python -m its_signal_control.cli evaluate \
-  --preset configs/historical_best.yaml \
-  --weights models/historical_best/adp_agent_weights.json \
+python -m its_signal_control.cli evaluate `
+  --preset configs\final_eval_checkerboard_neighbor_adp_ckpt20.yaml `
   --headless
 ```
 
-完成後會產生：
-
-- `outputs/runs/historical_best/eval_metrics.csv`
-- `outputs/runs/historical_best/eval_summary.csv`
-- `outputs/runs/historical_best/eval_paired_summary.csv`
-- `outputs/runs/historical_best/eval_comparison.svg`
-- `outputs/runs/historical_best/eval_comparison_episodes.svg`
-
-若要看 GUI：
+Random zero：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\reproduce_best.ps1 -Gui
-```
-
-## 訓練與評估方法
-
-訓練：
-
-```bash
-python -m its_signal_control.cli train --preset configs/training.yaml --headless
-```
-
-評估：
-
-```bash
-python -m its_signal_control.cli evaluate \
-  --preset configs/evaluation.yaml \
-  --weights models/historical_best/adp_agent_weights.json \
+python -m its_signal_control.cli evaluate `
+  --preset configs\final_eval_random_zero.yaml `
   --headless
 ```
 
-重要參數：
+Greedy baseline：
 
-- `RUN_TRAINING`：是否執行 ADP 訓練。
-- `RUN_EVALUATION`：是否評估 baseline 與 ADP。
-- `RESET_WEIGHTS_FOR_TRAINING`：訓練前是否清空權重。
-- `LOAD_WEIGHTS_FOR_EVALUATION`：評估前是否載入權重。
-- `EVALUATION_CONTROLLERS`：預設為 `fixed_time_rr`、`greedy`、`max_pressure`、`adp_eval`。
-- `TRAIN_EPISODES`：預設 140。
-- `EVAL_EPISODES_PER_CONTROLLER`：預設每個 controller 24 episodes。
-- `REGENERATE_ROUTES`：是否重新產生 route file；預設使用已封存的 `grid_4x4_rate2500.rou.xml`。
-- `USE_GUI`：是否使用 `sumo-gui`。
-- `RENDER_STRESS`：是否在 GUI 中顯示 queue stress polygon。
+```powershell
+python -m its_signal_control.cli evaluate `
+  --preset configs\final_eval_greedy_baseline.yaml `
+  --headless
+```
 
-## 開發者擴充指引
+Max-pressure baseline：
 
-車輛重新導引時機評估：
+```powershell
+python -m its_signal_control.cli evaluate `
+  --preset configs\final_eval_max_pressure_baseline.yaml `
+  --headless
+```
 
-- 修改 `configs/*.yaml` 的 `REROUTING_PERIOD`、`REROUTING_PROBABILITY` 與事故時間設定。
-- 將 timing policy 放在 `src/its_signal_control/routing.py`。
-- 評估時固定 baseline 集合，避免只比較 ADP。
+Fixed-time baseline：
 
-Episode 內細粒度分析：
+```powershell
+python -m its_signal_control.cli evaluate `
+  --preset configs\final_eval_fixed_time_baseline.yaml `
+  --headless
+```
 
-- 在 `analysis.py` 使用 `StepLogWriter` 寫入 queue、speed、reward、phase、action。
-- 輸出位置固定為 `outputs/runs/<run_id>/step_logs/`。
-- 不要把 step log commit 進 Git。
+目前 final chart / CSV 已經放在：
 
-真實世界地圖匯入：
+```text
+outputs/runs/selected_methods_vs_baselines/
+```
 
-- 使用 `scripts/ingest_osm.py` 包裝 `netconvert`。
-- 匯入後在 `scenarios/real_world/` 建立獨立 scenario。
-- 保持 route、net、config 與 outputs 分離。
+## 重現 Checkerboard Training
 
-動態決策間隔與鄰居特徵：
+訓練 50 episodes，並每 10 episodes 儲存 checkpoint：
 
-- 在 `decision_intervals.py` 定義 per-agent interval policy。
-- 在 `features.py` 擴充 neighbor queue/state feature。
-- 保持 `ADPAgent.extract_features()` 的核心輸入相容，避免破壞既有權重載入流程。
+```powershell
+python -m its_signal_control.cli train `
+  --preset configs\final_train_checkerboard_neighbor_adp_50.yaml `
+  --headless
+```
 
-## 結果與輸出檔案
+評估 checkpoint 20：
 
-所有執行輸出都應放在 `outputs/`：
+```powershell
+python -m its_signal_control.cli evaluate `
+  --preset configs\final_eval_checkerboard_neighbor_adp_ckpt20.yaml `
+  --weights outputs\runs\final_reproduction\checkerboard_train_50\checkpoints\episode_0020.json `
+  --output-dir outputs\runs\final_reproduction\checkerboard_ckpt20_eval24 `
+  --headless
+```
 
-- `train_metrics.csv`：訓練 episode 指標。
-- `eval_metrics.csv`：各 controller 評估 episode 指標。
-- `eval_summary.csv`：success rate、gridlock rate、TTR、queue excess、throughput recovery。
-- `eval_paired_summary.csv`：ADP 與 baseline 的 paired comparison。
-- `adp_agent_weights.json`：訓練後權重。
-- `*.svg`：報告用圖表。
+如果重新訓練後要替換 final model，把新的 checkpoint 20 複製到 main model 位置：
 
-## Git 管理原則
+```powershell
+Copy-Item `
+  -LiteralPath outputs\runs\final_reproduction\checkerboard_train_50\checkpoints\episode_0020.json `
+  -Destination models\main_methods\checkerboard_neighbor_adp_checkpoint_0020.json `
+  -Force
+```
 
-應 commit：
+## 程式碼導覽
 
-- `src/`
-- `configs/`
-- `models/historical_best/`
-- `scenarios/grid_4x4/`
-- `README.md`
-- `README.zh-TW.md`
-- `WHITEPAPER.md`
-- `tests/`
+- `src/its_signal_control/decision_intervals.py`  
+  Decision Order schedule 與 3-lane node ID parsing。
 
-不應 commit：
+- `src/its_signal_control/controllers.py`  
+  greedy、max-pressure、ADP action selection、incident-action features、DecisionCache。
 
-- `outputs/` 內產物
-- `results*`、`history/`、`route_tmp/`
-- `__pycache__/`
-- 大量歷史 sweep archive
+- `src/its_signal_control/agent.py`  
+  ADP feature extraction、neighbor feature vector、value estimation、TD update。
 
-歷史最佳權重已被正式封裝在 `models/historical_best/`，因此不需要把舊的 `results_validation/` 或 `results_archive/` 放入 Git。
+- `src/its_signal_control/experiment.py`  
+  SUMO episode loop，將 Decision Order 與 neighbor cache 接進每個 control cycle。
+
+- `src/its_signal_control/config.py`  
+  預設值與 flat YAML loader。
+
+重要 final artifacts：
+
+- `models/main_methods/checkerboard_neighbor_adp_checkpoint_0020.json`  
+  最終選定 trained model。
+
+- `outputs/runs/selected_methods_vs_baselines/combined_summary.csv`  
+  final aggregate table。
+
+- `outputs/runs/selected_methods_vs_baselines/pairwise_vs_greedy.csv`  
+  和 greedy 的 paired deltas。
+
+- `outputs/runs/selected_methods_vs_baselines/selected_methods_vs_baselines_horizontal_v2.svg`  
+  final comparison chart。
+
+重要 tests：
+
+- `tests/test_decision_order_schedule.py`  
+  Decision Order strategies 與 neighbor lookup。
+
+- `tests/test_agent_features.py`  
+  compact residual、incident features、neighbor features。
+
+- `tests/test_config_loading.py`  
+  final 與探索用 presets 是否能被 flat YAML loader 正確讀取。
+
+## 文件
+
+- `WHITEPAPER.md`：最詳細的實作說明。
+- `REPORT.md`：中英雙語方法與結果報告。
+- `HISTORY_LOG.md`：完整開發歷程。
+- `decision_order.md`：和隊友新版 Decision Order 的差異整理。
+
+## 注意事項
+
+- 預設仍然是 `DECISION_ORDER_STRATEGY: "unified"`，所以不會破壞原本行為。
+- 只有 preset 啟用 `ALLOW_NEIGHBOR_INFO: true` 時才會加入 neighbor features。
+- Baseline 不使用 Decision Order，也不使用 neighbor info。
+- Checkerboard checkpoint 20 是 final trained model，因為 checkpoint sweep 顯示 checkpoint 50 退化。
+- Random trained checkpoints 沒有被選入 final methods，因為 Random zero 整體更穩。

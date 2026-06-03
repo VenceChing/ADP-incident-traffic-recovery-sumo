@@ -7,6 +7,7 @@ import traci
 from .agent import ADPAgent
 from .config import *
 from .controllers import (
+    DecisionCache,
     get_action_pressure_features,
     get_incident_action_features,
     get_agent_queues,
@@ -183,6 +184,7 @@ def run_episode(
         incident_edges=incident_edges,
         random_seed=DECISION_ORDER_RANDOM_SEED + episode,
     )
+    decision_cache = DecisionCache()
 
     while traci.simulation.getMinExpectedNumber() > 0 and not episode_ended:
         sim_time = traci.simulation.getTime()
@@ -195,7 +197,7 @@ def run_episode(
         learning_active = sim_time >= INCIDENT_TIME
         decision_interval = get_active_decision_interval(controller, sim_time)
         rr_action = select_round_robin_action(sim_time, context["action_names"], decision_interval)
-        if DECISION_ORDER_STRATEGY == "greedy_dynamic":
+        if DECISION_ORDER_STRATEGY in {"greedy_dynamic", "queue_length_decay", "queue_length_premium"}:
             queue_snapshot = {
                 agent_id: get_agent_queues(env, agent_id, sim_time, incident_edges, context)
                 for agent_id in agents.keys()
@@ -211,6 +213,15 @@ def run_episode(
             agent = agents[agent_id]
             current_queues = get_agent_queues(env, agent_id, sim_time, incident_edges, context)
             current_phase = python_current_phases[agent_id]
+            neighbor_ids: list[str] = []
+            neighbor_actions: dict[str, int] = {}
+            neighbor_phases: dict[str, int] = {}
+            neighbor_queues: dict[str, float] = {}
+            if ALLOW_NEIGHBOR_INFO:
+                neighbor_ids = decision_order_schedule.get_neighbors(agent_id)
+                neighbor_actions, neighbor_phases, neighbor_queues = decision_cache.get_neighbor_info(
+                    neighbor_ids
+                )
 
             if not learning_active or fixed_rr_control:
                 action = rr_action
@@ -232,9 +243,19 @@ def run_episode(
                     incident_edges,
                     epsilon,
                     context,
+                    neighbor_ids=neighbor_ids,
+                    neighbor_actions=neighbor_actions,
+                    neighbor_phases=neighbor_phases,
+                    neighbor_queues=neighbor_queues,
                 )
 
             target_actions[agent_id] = action
+            decision_cache.cache_decision(
+                agent_id,
+                action,
+                current_phase,
+                sum(current_queues.values()),
+            )
             if adp_control and learning_active:
                 dist_to_incident = get_incident_distance(agent_id, incident_edges)
                 incident_direction = get_incident_direction(agent_id, incident_edges)
@@ -260,6 +281,10 @@ def run_episode(
                         downstream_queues=downstream_queues,
                         downstream_capacities=downstream_capacities,
                         incident_action_features=incident_action_features,
+                        neighbor_ids=neighbor_ids,
+                        neighbor_actions=neighbor_actions,
+                        neighbor_phases=neighbor_phases,
+                        neighbor_queues=neighbor_queues,
                     ),
                     "action": action,
                     "current_queues": current_queues,
@@ -267,6 +292,10 @@ def run_episode(
                     "action_pressures": action_pressures,
                     "downstream_queues": downstream_queues,
                     "downstream_capacities": downstream_capacities,
+                    "neighbor_ids": neighbor_ids,
+                    "neighbor_actions": neighbor_actions,
+                    "neighbor_phases": neighbor_phases,
+                    "neighbor_queues": neighbor_queues,
                 }
 
             if TRACE_ACTIONS and step % (decision_interval * TRACE_ACTION_INTERVALS) == 0:
@@ -405,6 +434,15 @@ def run_episode(
                 if status in {"GRIDLOCK", "SUCCESS"}:
                     final_status = status
                     if train_adp and adp_control and learning_active:
+                        neighbor_info = {
+                            aid: (
+                                cache.get("neighbor_ids", []),
+                                cache.get("neighbor_actions", {}),
+                                cache.get("neighbor_phases", {}),
+                                cache.get("neighbor_queues", {}),
+                            )
+                            for aid, cache in step_cache.items()
+                        }
                         update_adp_agents(
                             agents,
                             env,
@@ -415,6 +453,7 @@ def run_episode(
                             incident_edges,
                             is_gridlock=status == "GRIDLOCK",
                             context=context,
+                            neighbor_info=neighbor_info,
                         )
                     episode_ended = True
                     break
@@ -438,7 +477,18 @@ def run_episode(
                     switch_count += 1
             python_current_phases[agent_id] = target_actions[agent_id]
 
+        decision_cache.clear()
+
         if train_adp and adp_control and learning_active:
+            neighbor_info = {
+                aid: (
+                    cache.get("neighbor_ids", []),
+                    cache.get("neighbor_actions", {}),
+                    cache.get("neighbor_phases", {}),
+                    cache.get("neighbor_queues", {}),
+                )
+                for aid, cache in step_cache.items()
+            }
             update_adp_agents(
                 agents,
                 env,
@@ -449,6 +499,7 @@ def run_episode(
                 incident_edges,
                 is_gridlock=False,
                 context=context,
+                neighbor_info=neighbor_info,
             )
 
     episode_end_l1_norms = get_agent_weight_l1_norms(agents)

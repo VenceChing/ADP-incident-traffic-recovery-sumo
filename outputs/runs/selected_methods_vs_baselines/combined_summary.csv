@@ -1,0 +1,6 @@
+run_key,label,group,controller,success_rate,mean_ttr_success_only,mean_queue_excess_area,mean_throughput_recovery,source
+checkerboard_ckpt_20,Checkerboard ckpt 20,Selected,adp_eval,0.7916666666666666,417.2631578947368,18209.005925,1.1637822083333333,outputs\runs\checkerboard_50_eval24_compare\checkerboard_checkpoint_0020\eval\eval_summary.csv
+random_zero,Random zero,Selected,adp_eval,0.7916666666666666,388.3157894736842,18248.904720833332,1.14318025,outputs\runs\checkerboard_50_eval24_compare\random_zero\eval\eval_summary.csv
+greedy,Greedy,Baseline,greedy,0.7083333333333334,408.5882352941176,20462.2173875,1.1491982916666668,outputs\runs\checkerboard_50_eval24_compare\greedy_baseline\eval\eval_summary.csv
+max_pressure,Max pressure,Baseline,max_pressure,0.5,419.0833333333333,30814.820962499998,1.0592725,outputs\runs\checkerboard_50_eval24_compare\max_pressure_baseline\eval\eval_summary.csv
+fixed_time,Fixed time,Baseline,fixed_time_rr,0.0,nan,69305.09219583333,0.9190830416666667,outputs\runs\checkerboard_50_eval24_compare\fixed_time_baseline\eval\eval_summary.csv

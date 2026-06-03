@@ -75,6 +75,105 @@ def _write_csv(path: Path, rows: list[dict[str, object]], fieldnames: list[str])
             writer.writerow({field: row.get(field, "") for field in fieldnames})
 
 
+def _render_checkpoint_summary_chart(path: Path, rows: list[dict[str, object]]) -> None:
+    if not rows:
+        return
+
+    width = 1120
+    left = 245
+    right = 150
+    top = 62
+    panel_height = 132
+    gap = 34
+    metrics = [
+        ("success_rate", "ADP success rate", "higher is better", False),
+        ("mean_ttr_success_only", "Mean TTR, successes only", "lower is better", True),
+        ("mean_queue_excess_area", "Mean queue excess area", "lower is better", True),
+        ("adp_vs_greedy_mean_queue_diff", "ADP - Greedy queue excess", "lower is better", True),
+    ]
+    height = top + len(metrics) * panel_height + (len(metrics) - 1) * gap + 52
+    chart_width = width - left - right
+    bar_height = 20
+    row_gap = 9
+    colors = {
+        "zero_weights": "#0f766e",
+        "final": "#2563eb",
+    }
+
+    def f(row: dict[str, object], key: str) -> float:
+        try:
+            return float(row.get(key, 0.0) or 0.0)
+        except ValueError:
+            return 0.0
+
+    def value_label(value: float, key: str) -> str:
+        if "rate" in key:
+            return f"{value:.3f}"
+        if abs(value) >= 1000:
+            return f"{value:.0f}"
+        return f"{value:.1f}"
+
+    svg = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="white"/>',
+        '<style>text{font-family:Arial,sans-serif}.axis{fill:#64748b;font-size:11px}.label{fill:#334155;font-size:12px}.title{fill:#0f172a;font-size:14px;font-weight:700}.note{fill:#64748b;font-size:11px}</style>',
+        '<text x="28" y="30" font-family="Arial" font-size="20" font-weight="700">Checkpoint candidate comparison</text>',
+    ]
+
+    for panel_idx, (key, title, note, lower_is_better) in enumerate(metrics):
+        y0 = top + panel_idx * (panel_height + gap)
+        y1 = y0 + panel_height
+        values = [f(row, key) for row in rows]
+        min_value = min(values)
+        max_value = max(values)
+        if key == "adp_vs_greedy_mean_queue_diff":
+            scale_min = min(0.0, min_value)
+            scale_max = max(0.0, max_value)
+        else:
+            scale_min = 0.0
+            scale_max = max(1.0 if "rate" in key else 0.0, max_value)
+        if scale_max == scale_min:
+            scale_max = scale_min + 1.0
+        zero_x = left + (0.0 - scale_min) / (scale_max - scale_min) * chart_width
+        best = min(rows, key=lambda row: f(row, key)) if lower_is_better else max(rows, key=lambda row: f(row, key))
+
+        svg.extend(
+            [
+                f'<text x="28" y="{y0 - 14}" class="title">{title}</text>',
+                f'<text x="320" y="{y0 - 14}" class="note">{note}</text>',
+                f'<line x1="{left}" y1="{y1}" x2="{width - right}" y2="{y1}" stroke="#cbd5e1"/>',
+                f'<line x1="{zero_x:.1f}" y1="{y0 + 8}" x2="{zero_x:.1f}" y2="{y1}" stroke="#94a3b8"/>',
+                f'<text x="{left}" y="{y1 + 17}" text-anchor="middle" class="axis">{value_label(scale_min, key)}</text>',
+                f'<text x="{width - right}" y="{y1 + 17}" text-anchor="middle" class="axis">{value_label(scale_max, key)}</text>',
+            ]
+        )
+
+        for row_idx, row in enumerate(rows):
+            candidate = str(row.get("candidate", ""))
+            value = f(row, key)
+            y = y0 + 20 + row_idx * (bar_height + row_gap)
+            value_x = left + (value - scale_min) / (scale_max - scale_min) * chart_width
+            x = min(zero_x, value_x)
+            bar_width = abs(value_x - zero_x)
+            color = colors.get(candidate, "#334155")
+            is_best = row is best
+            svg.append(
+                f'<text x="{left - 16}" y="{y + 14}" text-anchor="end" class="label" '
+                f'font-weight="{700 if is_best else 400}">{candidate}</text>'
+            )
+            svg.append(
+                f'<rect x="{x:.1f}" y="{y}" width="{bar_width:.1f}" height="{bar_height}" '
+                f'fill="{color}" stroke="{"#0f172a" if is_best else "none"}" stroke-width="{2 if is_best else 0}"/>'
+            )
+            label_x = min(max(value_x + 8, left + 4), width - right + 8)
+            svg.append(f'<text x="{label_x:.1f}" y="{y + 14}" class="label">{value_label(value, key)}</text>')
+            if is_best:
+                svg.append(f'<text x="{width - right + 60}" y="{y + 14}" class="note">best</text>')
+
+    svg.append("</svg>")
+    path.write_text("\n".join(svg), encoding="utf-8")
+
+
 def _metric_float(row: dict[str, str], key: str) -> float:
     try:
         return float(row.get(key, 0.0) or 0.0)
@@ -348,6 +447,10 @@ def main() -> None:
 
     summary_path = output_root / "checkpoint_selection_summary.csv"
     _write_csv(summary_path, rows, list(rows[0].keys()))
+    _render_checkpoint_summary_chart(
+        output_root / "checkpoint_selection_summary.svg",
+        rows,
+    )
 
     best = min(rows, key=lambda row: float(row["mean_queue_excess_area"]))
     print(f"Wrote {summary_path}")

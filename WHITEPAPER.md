@@ -1,176 +1,317 @@
-# Technical Whitepaper: Incident-Aware Decentralized ADP Traffic Signal Control
+# Whitepaper: Neighbor-Aware Decision Order ADP for 3-Lane Incident Recovery
 
-## 1. System Identity
+## 1. Purpose
 
-This repository implements a SUMO-based intelligent transportation system for incident-induced congestion recovery. The control model is a decentralized Approximate Dynamic Programming controller over a Decentralized Markov Decision Process.
+This repository extends the 3-lane SUMO adaptive traffic signal controller with a sequential Decision Order mechanism. The final system keeps the original 3-lane ADP architecture, then adds a controlled ordering layer so that agents can observe earlier neighboring decisions in the same control cycle.
 
-Default reproducibility preset:
+The final claim is based on two selected methods:
 
-- Traffic demand: `RATE = 2500`
-- Decision interval: `DECISION_INTERVAL = 10`
-- Queue tolerance: `TAU = 1.1`
-- Learning rate: `ALPHA = 0.0005`
-- Discount factor: `GAMMA = 0.95`
-- Queue priority weight: `ADP_QUEUE_PRIORITY_WEIGHT = 2.0`
-- TD error cap: `ADP_MAX_ABS_TD_ERROR = 10.0`
-- Weights: `models/historical_best/adp_agent_weights.json`
+1. **Checkerboard Decision Order + neighbor-aware ADP, checkpoint 20**  
+   Main trained method. It uses learned residual ADP weights and the checkerboard order.
 
-## 2. Dec-MDP Formulation
+2. **Random Decision Order + neighbor-aware zero-weight ADP**  
+   Strong ablation/simple method. It uses the same ADP action heuristic and neighbor feature channel, but does not load learned weights.
 
-Let each signalized intersection be an agent `i in I`. The global system is represented as a Dec-MDP:
+Both methods are evaluated on the 4x4 3-lane incident-recovery scenario with 24 paired episodes at demand rate 6000.
 
-- Joint state: `S_t = (s_t^1, s_t^2, ..., s_t^n)`.
-- Local state: `s_t^i` contains local incoming queues, current phase, incident-relative geometry, elapsed incident time, and action-conditioned pressure/spillback features.
-- Independent action: `a_t^i in {N, E, S, W}` selects the green movement direction for intersection `i`.
-- Joint action: `A_t = (a_t^1, a_t^2, ..., a_t^n)`.
-- Transition: SUMO provides the real transition; ADP uses a one-step local heuristic model for lookahead.
-- Reward: local queue-excess and global gridlock penalties guide incident recovery.
-- Policy: each agent selects its own action using local state-action scoring without centralized joint-action optimization.
+## 2. Codebase Boundary
 
-The implementation is decentralized in action selection and learning updates. Shared global incident features enter each local feature vector, but agents do not solve a centralized joint value function.
+The final implementation lives in `traffic-adp-sumo-final`. The old repositories were used only as references:
 
-## 3. State and Feature Engineering
+- `ADP-incident-traffic-recovery-sumo`: source of the original Decision Order concept.
+- `traffic-adp-sumo-3lane`: source of the 3-lane architecture, lane-level queues, `three_lane_8` action space, compact residual ADP, and incident features.
 
-The ADP agent uses a linear value approximation over clipped numeric features.
+The final version does not require modifying either source repository.
 
-Feature groups:
+## 3. Main Implementation Files
 
-1. Local incoming queues  
-   For each incoming edge controlled by the agent:
-   `queue_feature = clip(queue / ADP_QUEUE_SCALE)`  
-   Current default: `ADP_QUEUE_SCALE = 50.0`.
+- `src/its_signal_control/decision_intervals.py`  
+  Implements `DecisionOrderSchedule` and 3-lane node parsing.
 
-2. Current phase one-hot  
-   Four-dimensional one-hot vector over `N, E, S, W`.
+- `src/its_signal_control/controllers.py`  
+  Implements ADP action selection, incident-action features, max-pressure, greedy, and `DecisionCache`.
 
-3. Incident direction one-hot  
-   Four-dimensional one-hot vector describing the relative direction from the agent to the nearest incident node. If the agent is at the incident or direction cannot be inferred, the vector is all zeros.
+- `src/its_signal_control/agent.py`  
+  Implements compact residual features, incident-action features, neighbor feature vector sizing, action value estimation, and ADP weight updates.
 
-4. Candidate action one-hot  
-   Four-dimensional one-hot vector for the action being scored.
+- `src/its_signal_control/experiment.py`  
+  Integrates Decision Order into each control cycle, fills the decision cache, passes neighbor features into action selection and learning, and records metrics.
 
-5. Per-action pressure  
-   For the selected action:
-   `pressure = upstream_queue - downstream_queue`  
-   Feature value:
-   `clip(pressure / ADP_QUEUE_SCALE)`.
+- `src/its_signal_control/config.py`  
+  Adds default-safe Decision Order config keys.
 
-6. Per-action downstream spillback  
-   For the selected action:
-   - `selected_downstream_queue`
-   - `selected_downstream_capacity`
-   - `downstream_occupancy = queue / capacity`
-   - `spillback_risk = max(0, (occupancy - threshold) / (1 - threshold))`
+- `models/main_methods/checkerboard_neighbor_adp_checkpoint_0020.json`  
+  Stable copy of the selected trained ADP checkpoint.
 
-7. Global incident features  
-   - Bias term: `1.0`
-   - Manhattan distance to incident scaled by `ADP_DISTANCE_SCALE = 6.0`
-   - Elapsed incident time scaled by `ADP_TIME_SCALE = 120.0`
-   - Incident active flag
-   - Phase switch flag
-   - Alignment with incident direction
-   - Opposite-to-incident flag
-   - Perpendicular-to-incident flag
-   - Incident-active spillback interaction
-   - Action-alignment distance interaction
+## 4. Default Safety
 
-All non-finite feature values are converted to `0.0`. Feature clipping uses `ADP_FEATURE_CLIP = 5.0` unless a feature has a stricter lower bound.
+Default behavior remains compatible with the original controller:
 
-## 4. Action Scoring Heuristic
-
-For each candidate action `a`, the agent estimates:
-
-```text
-score(a) = immediate_reward(predicted_next_queues, a)
-         + GAMMA * learned_value(predicted_next_features)
-         + ADP_QUEUE_PRIORITY_WEIGHT * served_queue(a) / ADP_QUEUE_SCALE
+```python
+DECISION_ORDER_STRATEGY = "unified"
+DECISION_ORDER_RANDOM_SEED = 42
+ALLOW_NEIGHBOR_INFO = False
 ```
 
-Where:
+With these defaults, agents are processed in the normal dictionary insertion order, no neighbor features are appended, and existing non-Decision-Order behavior is preserved.
 
-- `learned_value(features) = dot(weights, features)`
-- `served_queue(a)` is the current queue on incoming edges served by action `a`
-- `ADP_QUEUE_PRIORITY_WEIGHT = 2.0`
-- Evaluation uses deterministic argmax
-- Training uses epsilon-greedy exploration from `0.20` to `0.02`
+## 5. Decision Order Schedule
 
-This is an ADP-inspired state-action scorer. It combines a metric-aligned immediate reward, a learned linear value estimate, and a served-queue priority term.
+`DecisionOrderSchedule` supports:
 
-## 5. Reward Function Design
+- `unified`
+- `distance_decay`
+- `incident_manhattan_distance_decay`
+- `incident_manhattan_distance_premium`
+- `checkerboard`
+- `ring`
+- `greedy_dynamic`
+- `queue_length_decay`
+- `queue_length_premium`
+- `random`
 
-The reward is a negative penalty. Incident edges are excluded from non-incident queue-excess pressure so the controller does not over-optimize impossible blocked queues.
+The schedule is built from 3-lane node IDs such as `A0`, `B2`, `D3`. It also keeps compatibility with old IDs like `ti_0_0` when possible.
 
-Reward components:
+### 5.1 Checkerboard Order
 
-1. Total non-incident queue penalty  
-   `ADP_TOTAL_QUEUE_WEIGHT * total_nonincident_queue / ADP_QUEUE_SCALE`
-
-2. Queue-excess penalty  
-   For each non-incident edge:
-   `max(0, current_queue - TAU * baseline_queue) / ADP_QUEUE_SCALE`  
-   Current default: `TAU = 1.1`.
-
-3. Phase-switch penalty  
-   Applied when `action != current_phase`.  
-   The switch penalty is computed from lost time:
-   `SWITCH_PENALTY_SCALE * (YELLOW_SECONDS + ALL_RED_SECONDS) / DECISION_INTERVAL`.
-
-4. Global gridlock failure penalty  
-   If gridlock is detected:
-   `min(ADP_GRIDLOCK_PENALTY, 5.0 + normalized_gridlock_pressure)`.
-
-Final reward:
+Checkerboard sorts intersections by coordinate parity:
 
 ```text
-reward = -local_queue_penalty - switch_penalty - gridlock_penalty
+(x + y) % 2
 ```
 
-## 6. Transition Heuristic Model
+Then it breaks ties by `x`, `y`, and original agent order. This creates a spatially alternating update pattern. Adjacent intersections generally do not decide back-to-back in the same parity group, which reduces immediate local coupling while still making earlier decisions available to later neighbors.
 
-SUMO is the source of truth for real transitions. The ADP lookahead uses a one-step local queue prediction:
+This is the selected trained method because checkpoint 20 produced the best trained result.
+
+### 5.2 Random Order
+
+Random order shuffles the agent list with:
+
+```python
+random.Random(DECISION_ORDER_RANDOM_SEED + episode).shuffle(order)
+```
+
+The random order is deterministic for a given episode and seed. It is used as a strong ablation because zero-weight random performed very well: it showed that the sequential ordering and neighbor-aware heuristic can contribute even before learned ADP weights help.
+
+## 6. Neighbor-Aware Sequential Decisions
+
+The old Decision Order concept only becomes substantively useful if later agents can observe earlier decisions. The final integration therefore adds a per-cycle `DecisionCache`.
+
+For each control cycle:
+
+1. Build the decision order.
+2. Iterate agents in that order.
+3. Before an agent chooses an action, query the cache for already-decided 4-connected neighbors.
+4. Pass neighbor actions, phases, and queues into the ADP feature extractor.
+5. After the agent chooses, cache its action, current phase, and total queue.
+6. Use the same neighbor information path during ADP updates.
+7. Clear the cache at the end of the control cycle.
+
+Only earlier decisions in the same control cycle are visible. This is intentional: the order defines information direction for that cycle.
+
+## 7. Neighbor Features
+
+Neighbor features are enabled only when:
+
+```yaml
+ALLOW_NEIGHBOR_INFO: true
+```
+
+The feature size is fixed at agent construction time:
+
+```python
+neighbor_feature_count = max_neighbors * (2 * num_phases + 4)
+```
+
+For the final `three_lane_8` action space with four neighbor slots:
 
 ```text
-next_queues = copy(current_queues)
-for blocked incident edge:
-    next_queues[edge] = 0
-
-for green edge selected by action:
-    green_discharge = min(estimated_green_discharge(edge), downstream_free_space_per_edge)
-    next_queues[green_edge] = max(0, current_queue - green_discharge)
-
-for red incoming edge:
-    next_queues[red_edge] = current_queue + estimated_red_arrival(edge)
+4 * (2 * 8 + 4) = 80 neighbor features
 ```
 
-The estimates are initialized from defaults and then updated by EWMA:
+Each neighbor slot contains:
 
-- Green discharge default: `3.0 * max(1, decision_interval / 10)`
-- Red arrival default: `1.0 * interval_scale * demand_scale`
-- Demand scale: `traffic_rate / 1500`
-- EWMA alpha: `ADP_MODEL_EWMA_ALPHA = 0.05`
-- Minimum observations before using learned model: `ADP_MIN_MODEL_OBSERVATIONS = 3`
+- one-hot earlier neighbor action
+- one-hot earlier neighbor current phase
+- normalized neighbor queue
+- same-action indicator
+- different-action indicator
+- normalized queue when same action is selected
 
-## 7. Baselines and Evaluation
+This fixes a risk found in the old implementation: neighbor features were appended without reliably resizing the agent weight vector. In the final implementation, feature dimension and weight dimension are created consistently.
 
-Supported controllers:
+## 8. ADP Architecture Used by Both Final Methods
 
-- `fixed_time_rr`: round-robin fixed-time controller.
-- `greedy`: selects the phase serving the largest current local queue.
-- `max_pressure`: selects the phase with largest upstream-minus-downstream pressure.
-- `adp_eval`: deterministic ADP evaluation from packaged or trained weights.
+Both selected methods use:
 
-Evaluation protocol:
+```yaml
+ACTION_SPACE: "three_lane_8"
+ADP_ACTION_SCORING_MODE: "heuristic_residual"
+ADP_FEATURE_SET: "compact_residual"
+ADP_INCIDENT_ACTION_FEATURES_ENABLED: true
+ADP_RESIDUAL_VALUE_WEIGHT: 0.05
+ADP_QUEUE_PRIORITY_WEIGHT: 2.0
+ADP_LANE_FAIRNESS_WEIGHT: 0.10
+ADP_LANE_FAIRNESS_MARGIN: 5.0
+ALPHA: 0.00025
+ADP_MAX_ABS_TD_ERROR: 5.0
+SWITCH_PENALTY_SCALE: 0.04
+```
 
-- Incidents are generated from bidirectional internal grid segments.
-- Train/eval incident split uses `TRAIN_INCIDENT_FRACTION = 0.70`.
-- Evaluation controllers run on matched seeds and held-out incidents.
-- Metrics include success rate, gridlock rate, time to recovery, queue-excess area, halting ratio, throughput recovery, switch rate, and paired ADP-vs-baseline comparisons.
+### 8.1 `three_lane_8`
 
-## 8. Extension Anchors
+The 3-lane controller uses an 8-action signal space. It is more expressive than the old 1-lane architecture and uses lane-level queue keys.
 
-- Vehicle rerouting timing: `routing.py`, `REROUTING_PROBABILITY`, `REROUTING_PERIOD`.
-- Intra-episode step logs: `analysis.py`, `outputs/runs/<run_id>/step_logs/`.
-- Real-world map ingestion: `maps.py`, `scripts/ingest_osm.py`, SUMO `netconvert`.
-- Dynamic intervals and neighbor features: `decision_intervals.py`, `features.py`.
+### 8.2 Compact Residual Features
 
-These modules are intentionally separated from the core ADP engine so experiments can expand without destabilizing reproduction of the historical-best baseline.
+The compact residual feature set keeps the action-conditioned features needed for residual ADP while dropping redundant full-state phase/direction features. The compact feature vector includes:
+
+- normalized local queue features
+- selected action one-hot
+- six global action features:
+  - bias
+  - incident-active flag
+  - switch-action flag
+  - normalized pressure
+  - downstream occupancy
+  - spillback risk
+- six incident-action features when enabled
+- optional neighbor features
+
+### 8.3 Incident-Action Features
+
+For each candidate action, the controller computes six incident-aware features:
+
+- blocked downstream ratio
+- incident-node downstream ratio
+- near-incident downstream ratio
+- blocked downstream ratio multiplied by served queue
+- incident-node ratio multiplied by served queue
+- near-incident ratio multiplied by served queue
+
+These features are active only after the incident is active and only for the 3-lane action space.
+
+### 8.4 Heuristic Residual Action Scoring
+
+The ADP policy is not purely learned. It scores each action as a heuristic base plus a bounded learned residual. With zero weights, the controller still has a meaningful heuristic policy. With trained weights, ADP can adjust the heuristic ranking.
+
+This matters for the final comparison:
+
+- Checkerboard checkpoint 20 demonstrates useful learned residual contribution.
+- Random zero demonstrates the contribution of order and neighbor-aware heuristic behavior without learned weights.
+
+## 9. Final Selected Methods
+
+### 9.1 Main Method: Checkerboard Neighbor ADP, Checkpoint 20
+
+Config:
+
+```text
+configs/final_eval_checkerboard_neighbor_adp_ckpt20.yaml
+```
+
+Weight:
+
+```text
+models/main_methods/checkerboard_neighbor_adp_checkpoint_0020.json
+```
+
+Properties:
+
+- trained ADP method
+- checkerboard decision order
+- neighbor features enabled
+- compact residual feature set
+- incident-action features enabled
+- checkpoint selected from 50-episode training sweep
+
+### 9.2 Secondary Method: Random Zero
+
+Config:
+
+```text
+configs/final_eval_random_zero.yaml
+```
+
+Properties:
+
+- zero learned weights
+- random decision order
+- neighbor features enabled
+- compact residual feature set
+- incident-action features enabled
+- useful as ablation and simple method
+
+Random zero has no weight artifact by design. It is reproduced by setting:
+
+```yaml
+LOAD_WEIGHTS_FOR_EVALUATION: false
+DECISION_ORDER_STRATEGY: "random"
+ALLOW_NEIGHBOR_INFO: true
+```
+
+## 10. Final Evaluation Results
+
+Final summary files:
+
+```text
+outputs/runs/selected_methods_vs_baselines/combined_summary.csv
+outputs/runs/selected_methods_vs_baselines/pairwise_vs_greedy.csv
+outputs/runs/selected_methods_vs_baselines/selected_methods_vs_baselines_horizontal_v2.svg
+```
+
+| Method | Success | TTR | Queue excess | Throughput recovery |
+|---|---:|---:|---:|---:|
+| Checkerboard ckpt 20 | 79.17% | 417.3 | 18,209 | 1.164 |
+| Random zero | 79.17% | 388.3 | 18,249 | 1.143 |
+| Greedy | 70.83% | 408.6 | 20,462 | 1.149 |
+| Max pressure | 50.00% | 419.1 | 30,815 | 1.059 |
+| Fixed time | 0.00% | n/a | 69,305 | 0.919 |
+
+Paired against greedy:
+
+| Method | Queue excess minus greedy | Queue wins | TTR minus greedy on both-success episodes |
+|---|---:|---:|---:|
+| Checkerboard ckpt 20 | -2,253 | 17/24 | -15.3 |
+| Random zero | -2,213 | 17/24 | -35.8 |
+| Max pressure | +10,353 | 3/24 | +35.5 |
+| Fixed time | +48,843 | 0/24 | n/a |
+
+## 11. Interpretation
+
+Checkerboard checkpoint 20 is the best main method because it is the strongest trained ADP result. It has the lowest queue excess, highest throughput recovery, and a clear paired queue improvement over greedy.
+
+Random zero is not a trained ADP result, but it is valuable because it shows that Decision Order with neighbor-aware sequential information is meaningful even before learning. It is best described as a strong ablation or lightweight variant.
+
+The random trained checkpoint sweep showed degradation as training continued. The checkerboard checkpoint sweep showed that checkpoint 20 is the useful training point, while later checkpoints are less stable.
+
+## 12. Reproducibility Commands
+
+Train checkerboard for 50 episodes and save checkpoints:
+
+```powershell
+cd D:\Projects\AI\Final\traffic-adp-sumo-final
+$env:PYTHONPATH = "$PWD\src;$env:SUMO_HOME\tools"
+python -m its_signal_control.cli train --preset configs\final_train_checkerboard_neighbor_adp_50.yaml --headless
+```
+
+Evaluate selected checkerboard checkpoint:
+
+```powershell
+python -m its_signal_control.cli evaluate --preset configs\final_eval_checkerboard_neighbor_adp_ckpt20.yaml --headless
+```
+
+Evaluate random zero:
+
+```powershell
+python -m its_signal_control.cli evaluate --preset configs\final_eval_random_zero.yaml --headless
+```
+
+Evaluate baselines:
+
+```powershell
+python -m its_signal_control.cli evaluate --preset configs\final_eval_greedy_baseline.yaml --headless
+python -m its_signal_control.cli evaluate --preset configs\final_eval_max_pressure_baseline.yaml --headless
+python -m its_signal_control.cli evaluate --preset configs\final_eval_fixed_time_baseline.yaml --headless
+```

@@ -1,0 +1,5 @@
+run_key,label,paired_episodes,candidate_successes,greedy_successes,candidate_only_successes,greedy_only_successes,both_successes_for_ttr,mean_queue_excess_minus_greedy,queue_wins_vs_greedy,queue_losses_vs_greedy,queue_ties_vs_greedy,mean_ttr_minus_greedy_success_pairs,ttr_wins_vs_greedy,ttr_losses_vs_greedy,ttr_ties_vs_greedy
+checkerboard_ckpt_20,Checkerboard ckpt 20,24,19,17,3,1,16,-2253.2114625,17,7,0,-15.3125,9,7,0
+random_zero,Random zero,24,19,17,4,2,15,-2213.3126666666667,17,7,0,-35.8,10,3,2
+fixed_time,Fixed time,24,0,17,0,17,0,48842.87480833334,0,24,0,,0,0,0
+max_pressure,Max pressure,24,12,17,1,6,11,10352.603575,3,21,0,35.54545454545455,4,7,0

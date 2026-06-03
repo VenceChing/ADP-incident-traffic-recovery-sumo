@@ -67,7 +67,7 @@ class ADPAgent:
         self.global_action_feature_count = 6 if feature_set == "compact_residual" else 14
         self.incident_action_feature_count = max(0, int(incident_action_feature_count))
         self.neighbor_feature_max_neighbors = max(0, int(neighbor_feature_max_neighbors))
-        self.neighbor_feature_count = self.neighbor_feature_max_neighbors * (2 * num_phases + 1)
+        self.neighbor_feature_count = self.neighbor_feature_max_neighbors * (2 * num_phases + 4)
         if feature_set == "compact_residual":
             self.feature_dim = (
                 len(incoming_edges)
@@ -371,6 +371,7 @@ class ADPAgent:
             neighbor_actions,
             neighbor_phases,
             neighbor_queues,
+            selected_action,
         )
 
         if self.feature_set == "compact_residual":
@@ -398,6 +399,7 @@ class ADPAgent:
         neighbor_actions: dict[str, int] | None = None,
         neighbor_phases: dict[str, int] | None = None,
         neighbor_queues: dict[str, float] | None = None,
+        selected_action: int | None = None,
     ) -> list[float]:
         if self.neighbor_feature_max_neighbors <= 0:
             return []
@@ -419,11 +421,22 @@ class ADPAgent:
         action_offset = 0
         phase_offset = self.neighbor_feature_max_neighbors * self.num_phases
         queue_offset = phase_offset + self.neighbor_feature_max_neighbors * self.num_phases
+        same_action_offset = queue_offset + self.neighbor_feature_max_neighbors
+        different_action_offset = same_action_offset + self.neighbor_feature_max_neighbors
+        queue_same_action_offset = different_action_offset + self.neighbor_feature_max_neighbors
 
         for idx, neighbor_id in enumerate(ordered_ids):
             action = neighbor_actions.get(neighbor_id)
             if action is not None and 0 <= action < self.num_phases:
                 features[action_offset + idx * self.num_phases + action] = 1.0
+                if selected_action is not None:
+                    if action == selected_action:
+                        features[same_action_offset + idx] = 1.0
+                        features[queue_same_action_offset + idx] = self._normalized_queue(
+                            neighbor_queues.get(neighbor_id, 0.0)
+                        )
+                    else:
+                        features[different_action_offset + idx] = 1.0
 
             phase = neighbor_phases.get(neighbor_id)
             if phase is not None and 0 <= phase < self.num_phases:
@@ -620,6 +633,10 @@ class ADPAgent:
         downstream_queues: list[float] | None,
         downstream_capacities: list[float] | None,
         incident_action_features: list[list[float]] | None,
+        neighbor_ids: list[str] | None,
+        neighbor_actions: dict[str, int] | None,
+        neighbor_phases: dict[str, int] | None,
+        neighbor_queues: dict[str, float] | None,
         depth: int,
     ) -> list[float]:
         q_values = [float("-inf")] * self.num_phases
@@ -630,6 +647,8 @@ class ADPAgent:
                 downstream_queues=downstream_queues,
                 downstream_capacities=downstream_capacities,
                 blocked_edges=incident_edges,
+                neighbor_actions=neighbor_actions,
+                neighbor_queues=neighbor_queues,
             )
             reward = self.calculate_reward(
                 predicted_queues,
@@ -652,6 +671,10 @@ class ADPAgent:
                 downstream_queues=downstream_queues,
                 downstream_capacities=downstream_capacities,
                 incident_action_features=incident_action_features,
+                neighbor_ids=neighbor_ids,
+                neighbor_actions=neighbor_actions,
+                neighbor_phases=neighbor_phases,
+                neighbor_queues=neighbor_queues,
             )
             served_score = self._served_queue_for_action(current_queues, action) / self.queue_scale
             pressure_score = (
@@ -690,6 +713,10 @@ class ADPAgent:
                     downstream_queues,
                     downstream_capacities,
                     incident_action_features,
+                    neighbor_ids,
+                    neighbor_actions,
+                    neighbor_phases,
+                    neighbor_queues,
                     depth - 1,
                 )
                 q_value += gamma * self.residual_lookahead_weight * max(future_values)
@@ -718,6 +745,10 @@ class ADPAgent:
         downstream_queues: list[float] | None = None,
         downstream_capacities: list[float] | None = None,
         incident_action_features: list[list[float]] | None = None,
+        neighbor_ids: list[str] | None = None,
+        neighbor_actions: dict[str, int] | None = None,
+        neighbor_phases: dict[str, int] | None = None,
+        neighbor_queues: dict[str, float] | None = None,
     ) -> list[float]:
         if self.action_scoring_mode == "residual_lookahead":
             return self._estimate_residual_lookahead_values(
@@ -736,6 +767,10 @@ class ADPAgent:
                 downstream_queues,
                 downstream_capacities,
                 incident_action_features,
+                neighbor_ids,
+                neighbor_actions,
+                neighbor_phases,
+                neighbor_queues,
                 self.lookahead_depth,
             )
 
@@ -749,6 +784,8 @@ class ADPAgent:
                 downstream_queues=downstream_queues,
                 downstream_capacities=downstream_capacities,
                 blocked_edges=incident_edges,
+                neighbor_actions=neighbor_actions,
+                neighbor_queues=neighbor_queues,
             )
             served_queue = sum(
                 current_queues.get(edge_id, 0.0)
@@ -774,6 +811,10 @@ class ADPAgent:
                 downstream_queues,
                 downstream_capacities,
                 incident_action_features,
+                neighbor_ids,
+                neighbor_actions,
+                neighbor_phases,
+                neighbor_queues,
             )
             heuristic_score = reward + self.queue_priority_weight * served_queue / self.queue_scale
             if self.action_scoring_mode == "heuristic_residual":
@@ -789,6 +830,10 @@ class ADPAgent:
                     downstream_queues=downstream_queues,
                     downstream_capacities=downstream_capacities,
                     incident_action_features=incident_action_features,
+                    neighbor_ids=neighbor_ids,
+                    neighbor_actions=neighbor_actions,
+                    neighbor_phases=neighbor_phases,
+                    neighbor_queues=neighbor_queues,
                 )
                 q_value = heuristic_score + self.residual_value_weight * self.get_value(features)
             else:
@@ -811,6 +856,8 @@ class ADPAgent:
         downstream_queues: list[float] | None = None,
         downstream_capacities: list[float] | None = None,
         blocked_edges: list[str] | None = None,
+        neighbor_actions: dict[str, int] | None = None,
+        neighbor_queues: dict[str, float] | None = None,
     ) -> Dict[str, float]:
         next_queues = dict(current_queues)
         blocked_edge_set = set(blocked_edges or [])
@@ -828,6 +875,10 @@ class ADPAgent:
             if downstream_capacities and 0 <= action < len(downstream_capacities)
             else self.unbounded_downstream_capacity
         )
+        if neighbor_queues:
+            avg_neighbor_queue = sum(neighbor_queues.values()) / max(1, len(neighbor_queues))
+            if avg_neighbor_queue > 15.0:
+                downstream_capacity *= 0.8
         free_space = max(0.0, downstream_capacity - downstream_queue)
         per_edge_free_space = free_space / max(1, len(green_edges))
         for green_edge in green_edges:
@@ -838,7 +889,12 @@ class ADPAgent:
         for edge_id in self.incoming_edges:
             if edge_id in green_edges or edge_id in blocked_edge_set:
                 continue
-            next_queues[edge_id] = next_queues.get(edge_id, 0.0) + self._red_arrival_for_edge(edge_id)
+            arrival_rate = self._red_arrival_for_edge(edge_id)
+            if neighbor_actions:
+                active_neighbors = sum(1 for action_id in neighbor_actions.values() if action_id > 0)
+                if active_neighbors > 0:
+                    arrival_rate *= 1.0 + 0.2 * active_neighbors
+            next_queues[edge_id] = next_queues.get(edge_id, 0.0) + arrival_rate
         return next_queues
 
     def update_transition_model(

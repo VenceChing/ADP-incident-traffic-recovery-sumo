@@ -12,12 +12,12 @@ RUN_TRAINING: false
 RUN_EVALUATION: true
 LOAD_WEIGHTS_FOR_EVALUATION: true
 EVALUATION_CONTROLLERS: ["fixed_time_rr", "greedy", "max_pressure", "adp_eval"]
-RESULTS_DIR: "../../outputs/runs/three_lane_evaluation_24_decision_order_distance_decay"
-WEIGHTS_PATH: "../../outputs/runs/three_lane_training_50_decision_order_distance_decay/adp_agent_weights.json"
+RESULTS_DIR: "../../outputs/runs/three_lane_evaluation_24_decision_order_distance_decay_neighbor_info"
+WEIGHTS_PATH: "../../outputs/runs/three_lane_training_50_decision_order_distance_decay_neighbor_info/adp_agent_weights.json"
 EVAL_EPISODES_PER_CONTROLLER: 24
 TIME: 1800
 SWITCH_PENALTY_SCALE: 0.04
-ADP_VARIANT_LABEL: "three_lane_8_compact_residual_v4_decision_order_distance_decay"
+ADP_VARIANT_LABEL: "three_lane_8_compact_residual_v4_decision_order_distance_decay_neighbor_info"
 ADP_ACTION_SCORING_MODE: "heuristic_residual"
 ADP_FEATURE_SET: "compact_residual"
 ADP_RESIDUAL_VALUE_WEIGHT: 0.05
@@ -29,3 +29,4 @@ ALPHA: 0.00025
 ADP_MAX_ABS_TD_ERROR: 5.0
 DECISION_ORDER_STRATEGY: "distance_decay"
 DECISION_ORDER_RANDOM_SEED: 42
+ALLOW_NEIGHBOR_INFO: true

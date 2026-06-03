@@ -14,13 +14,13 @@ RESET_WEIGHTS_FOR_TRAINING: true
 LOAD_WEIGHTS_FOR_EVALUATION: false
 TRAIN_SAVE_WEIGHTS_EVERY_EPISODE: true
 TRAIN_WEIGHT_CHECKPOINT_INTERVAL: 10
-TRAIN_WEIGHT_CHECKPOINT_DIR: "../../outputs/runs/three_lane_training_50_decision_order_distance_decay/checkpoints"
-RESULTS_DIR: "../../outputs/runs/three_lane_training_50_decision_order_distance_decay"
+TRAIN_WEIGHT_CHECKPOINT_DIR: "../../outputs/runs/three_lane_training_50_decision_order_distance_decay_neighbor_info/checkpoints"
+RESULTS_DIR: "../../outputs/runs/three_lane_training_50_decision_order_distance_decay_neighbor_info"
 TRAIN_EPISODES: 50
 TRAIN_INCIDENT_SELECTION: "random"
 TIME: 1800
 SWITCH_PENALTY_SCALE: 0.04
-ADP_VARIANT_LABEL: "three_lane_8_compact_residual_v4_decision_order_distance_decay"
+ADP_VARIANT_LABEL: "three_lane_8_compact_residual_v4_decision_order_distance_decay_neighbor_info"
 ADP_ACTION_SCORING_MODE: "heuristic_residual"
 ADP_FEATURE_SET: "compact_residual"
 ADP_RESIDUAL_VALUE_WEIGHT: 0.05
@@ -32,3 +32,4 @@ ALPHA: 0.00025
 ADP_MAX_ABS_TD_ERROR: 5.0
 DECISION_ORDER_STRATEGY: "distance_decay"
 DECISION_ORDER_RANDOM_SEED: 42
+ALLOW_NEIGHBOR_INFO: true

@@ -23,6 +23,10 @@ tmp.*.xml
 *.svg
 *.csv
 
+!outputs/runs/
+!outputs/runs/selected_methods_vs_baselines/
+!outputs/runs/selected_methods_vs_baselines/*.csv
+!outputs/runs/selected_methods_vs_baselines/*.svg
 !models/**/*.json
 !configs/**/*.yaml
 !scenarios/**/*.net.xml
