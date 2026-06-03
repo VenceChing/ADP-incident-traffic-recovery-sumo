@@ -177,32 +177,57 @@ class DecisionOrderSchedule:
         return final_order
 
     def _ring_order(self) -> list[str]:
-        """環形：外向內螺旋排列"""
-        coords_map = {}
+        """環形：外向內螺旋排列 (由最外圈順時針往內包圍)"""
+        print(f"[環形排序] 開始建立外向內螺旋順序...")
+        
+        # 1. 建立座標到 Agent ID 的雙向對照表
+        coords_to_id = {}
         for agent_id in self.agent_ids:
             coords = self._parse_agent_coords(agent_id)
             if coords is not None:
-                coords_map[agent_id] = coords
+                coords_to_id[coords] = agent_id
 
-        if not coords_map:
+        if not coords_to_id:
             return self.agent_ids
 
-        # 計算螺旋距離
-        def spiral_distance(coords: tuple[int, int]) -> tuple[int, int, int]:
-            x, y = coords
-            max_coord = max(x, y)
-            ring = max_coord
-            if x == max_coord:  # 右邊
-                pos = y
-            elif y == 0:  # 下邊
-                pos = 2 * max_coord - x
-            elif x == 0:  # 左邊
-                pos = 2 * max_coord + max_coord - y
-            else:  # 上邊
-                pos = 4 * max_coord - x
-            return (ring, pos, x + y)
+        # 2. 找出網格邊界 (對於 4x4 來說，min_x=0, max_x=3, min_y=0, max_y=3)
+        all_x = [c[0] for c in coords_to_id.keys()]
+        all_y = [c[1] for c in coords_to_id.keys()]
+        min_x, max_x = min(all_x), max(all_x)
+        min_y, max_y = min(all_y), max(all_y)
 
-        return sorted(coords_map.keys(), key=lambda aid: spiral_distance(coords_map[aid]))
+        spiral_order = []
+        
+        # 3. 剝洋蔥演算法 (層層往內繞)
+        while min_x <= max_x and min_y <= max_y:
+            # 3a. 上邊：從左到右 (固定在最上方的 y)
+            for x in range(min_x, max_x + 1):
+                if (x, max_y) in coords_to_id and coords_to_id[(x, max_y)] not in spiral_order:
+                    spiral_order.append(coords_to_id[(x, max_y)])
+            
+            # 3b. 右邊：從上到下 (固定在最右邊的 x)
+            for y in range(max_y - 1, min_y - 1, -1):
+                if (max_x, y) in coords_to_id and coords_to_id[(max_x, y)] not in spiral_order:
+                    spiral_order.append(coords_to_id[(max_x, y)])
+            
+            # 3c. 下邊：從右到左 (固定在最下方的 y)
+            for x in range(max_x - 1, min_x - 1, -1):
+                if (x, min_y) in coords_to_id and coords_to_id[(x, min_y)] not in spiral_order:
+                    spiral_order.append(coords_to_id[(x, min_y)])
+            
+            # 3d. 左邊：從下到上 (固定在最左邊的 x)
+            for y in range(min_y + 1, max_y):
+                if (min_x, y) in coords_to_id and coords_to_id[(min_x, y)] not in spiral_order:
+                    spiral_order.append(coords_to_id[(min_x, y)])
+            
+            # 縮小邊界，往內推一圈
+            min_x += 1
+            max_x -= 1
+            min_y += 1
+            max_y -= 1
+
+        print(f"[環形排序結果] 最終回傳外向內順序: {spiral_order}")
+        return spiral_order
 
     def _random_order(self) -> list[str]:
         """隨機順序"""
