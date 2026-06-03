@@ -46,7 +46,7 @@ STRATEGIES = [
     ("random", "隨機順序：基準對照"),
 ]
 
-NUM_EPISODES_PER_STRATEGY = 10
+NUM_EPISODES_PER_STRATEGY = 24
 EVAL_CONTROLLERS = ["adp_eval"]
 
 
@@ -113,7 +113,8 @@ def run_strategy_evaluation(
             incident_edges = eval_incident_edges[episode % len(eval_incident_edges)]
 
             for controller in EVAL_CONTROLLERS:
-                seed = episode * 1000 + hash(strategy) % 100
+                #seed = episode * 1000 + hash(strategy) % 100
+                seed = episode * 1000 + 2026
 
                 print(
                     f"  Episode {episode + 1}/{NUM_EPISODES_PER_STRATEGY} | "

@@ -387,6 +387,7 @@ class ADPAgent:
                 neighbor_phases=neighbor_phases,
                 neighbor_queues=neighbor_queues,
             )
+            #print(f"[🔍 預測特徵] 行動 {candidate_action} | 特徵向量: {features}")
             values.append(self.get_value(features))
             
         return max(values) if values else 0.0
