@@ -1,4 +1,4 @@
-看final_submission_summary
+看https://hackmd.io/@0hzTh_93SzqlkhISH857sA/SJZSRFpxzl
 # ADP Incident Traffic Recovery in SUMO
 
 Traditional Chinese teammate guide: [README.zh-TW.md](README.zh-TW.md)
