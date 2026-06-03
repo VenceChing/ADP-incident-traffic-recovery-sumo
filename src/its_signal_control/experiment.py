@@ -3,6 +3,7 @@ from typing import Any
 
 import random
 import traci
+from its_signal_control import config
 
 from .agent import ADPAgent
 from .config import *
@@ -130,13 +131,14 @@ def run_episode(
 
     # === 初始化決策順序與決策快取 ===
     decision_order_schedule = DecisionOrderSchedule(
-        strategy=DECISION_ORDER_STRATEGY,
+        strategy=config.DECISION_ORDER_STRATEGY,
         agent_ids=list(agents.keys()),
         incident_edges=incident_edges,
         decision_interval=DECISION_INTERVAL,
         random_seed=RANDOM_SEED + episode,
     )
     decision_cache = DecisionCache()
+    print(f"[初始化] 決策順序策略: {config.DECISION_ORDER_STRATEGY}, 預計算順序: {decision_order_schedule.order}")
 
     # 🔥 【核心修正：全面接管紅綠燈控制權】 🔥
     # 在模擬正式開始前，把所有紅綠燈的內建自動計畫關閉，改成完全由 Python 手動控制
@@ -162,10 +164,10 @@ def run_episode(
         rr_action = select_round_robin_action(sim_time)
 
         # === 決策順序（支持 staggered 或 unified）===
-        if DECISION_ORDER_STRATEGY == "unified":
+        if config.DECISION_ORDER_STRATEGY == "unified":
             # 所有路口同時決策
             decision_order = list(agents.keys())
-        elif DECISION_ORDER_STRATEGY == "greedy_dynamic":
+        elif config.DECISION_ORDER_STRATEGY == "greedy_dynamic":
             # 動態貪心需要當前隊列信息
             current_queues_all = {
                 agent_id: sum(
@@ -195,6 +197,19 @@ def run_episode(
             current_queues = get_agent_queues(env, agent_id, sim_time, incident_edges)
             current_phase = python_current_phases[agent_id]
 
+            # === 先獲取鄰近信息（早決策的路口已快取） ===
+            neighbor_actions = {}
+            neighbor_phases = {}
+            neighbor_queues = {}
+            #print(config.ALLOW_NEIGHBOR_INFO)
+            if config.ALLOW_NEIGHBOR_INFO:
+                neighbors = decision_order_schedule.get_neighbors(agent_id)
+                #print(f"[🔍 鄰近信息] 路口 {agent_id} 的鄰近路口: {neighbors}")
+                neighbor_actions, neighbor_phases, neighbor_queues = decision_cache.get_neighbor_info(
+                    agent_id, neighbors
+                )
+                #print(f"[🔍 鄰近信息] 路口 {agent_id} 的鄰近動作: {neighbor_actions}, 相位: {neighbor_phases}, 隊列: {neighbor_queues}  ")
+
             if not learning_active or fixed_rr_control:
                 action = rr_action
                 q_values = [0.0] * agent.num_phases
@@ -205,6 +220,7 @@ def run_episode(
                 action = select_max_pressure_action(agent_id, context)
                 q_values = [0.0] * agent.num_phases
             else:
+                # ADP 決策 - 使用鄰近信息
                 action, q_values = select_adp_action(
                     agent_id,
                     agent,
@@ -215,12 +231,16 @@ def run_episode(
                     incident_edges,
                     epsilon,
                     context,
+                    neighbor_actions=neighbor_actions,
+                    neighbor_phases=neighbor_phases,
+                    neighbor_queues=neighbor_queues,
                 )
 
             target_actions[agent_id] = action
 
             # === 快取此路口的決策信息供鄰近路口使用 ===
             total_queue = sum(current_queues.values())
+            #print(f"[快取決策] 路口 {agent_id} 決策動作: {action}, 隊列總長: {total_queue}, 當前相位: {current_phase}")
             decision_cache.cache_decision(agent_id, action, current_phase, total_queue, sim_time)
 
             if adp_control and learning_active:
@@ -231,16 +251,7 @@ def run_episode(
                     agent_id, context
                 )
 
-                # === 獲取鄰近路口信息（如果啟用）===
-                neighbor_actions = {}
-                neighbor_phases = {}
-                neighbor_queues = {}
-                if ALLOW_NEIGHBOR_INFO:
-                    neighbors = decision_order_schedule.get_neighbors(agent_id)
-                    neighbor_actions, neighbor_phases, neighbor_queues = decision_cache.get_neighbor_info(
-                        agent_id, neighbors
-                    )
-
+                # 提取特徵（已包含鄰近信息）
                 features = agent.extract_features(
                     current_queues,
                     current_phase,
@@ -265,6 +276,9 @@ def run_episode(
                     "action_pressures": action_pressures,
                     "downstream_queues": downstream_queues,
                     "downstream_capacities": downstream_capacities,
+                    "neighbor_actions": neighbor_actions,
+                    "neighbor_phases": neighbor_phases,
+                    "neighbor_queues": neighbor_queues,
                 }
 
             if TRACE_ACTIONS and step % (DECISION_INTERVAL * TRACE_ACTION_INTERVALS) == 0:
@@ -387,6 +401,14 @@ def run_episode(
                 if status in {"GRIDLOCK", "SUCCESS"}:
                     final_status = status
                     if train_adp and adp_control and learning_active:
+                        neighbor_info = {
+                            aid: (
+                                cache.get("neighbor_actions", {}),
+                                cache.get("neighbor_phases", {}),
+                                cache.get("neighbor_queues", {}),
+                            )
+                            for aid, cache in step_cache.items()
+                        }
                         update_adp_agents(
                             agents,
                             env,
@@ -397,6 +419,7 @@ def run_episode(
                             incident_edges,
                             is_gridlock=status == "GRIDLOCK",
                             context=context,
+                            neighbor_info=neighbor_info,
                         )
                     episode_ended = True
                     break
@@ -424,6 +447,14 @@ def run_episode(
         decision_cache.clear()
 
         if train_adp and adp_control and learning_active:
+            neighbor_info = {
+                aid: (
+                    cache.get("neighbor_actions", {}),
+                    cache.get("neighbor_phases", {}),
+                    cache.get("neighbor_queues", {}),
+                )
+                for aid, cache in step_cache.items()
+            }
             update_adp_agents(
                 agents,
                 env,
@@ -434,6 +465,7 @@ def run_episode(
                 incident_edges,
                 is_gridlock=False,
                 context=context,
+                neighbor_info=neighbor_info,
             )
 
     episode_end_l1_norms = get_agent_weight_l1_norms(agents)

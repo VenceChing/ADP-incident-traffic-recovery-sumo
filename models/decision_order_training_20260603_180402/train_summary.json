@@ -1,0 +1,74 @@
+{
+  "strategy": "checkerboard",
+  "description": "棋盤式：對角線不相鄰，最小衝突",
+  "feature_dimension": 30,
+  "allow_neighbor_info": true,
+  "training_episodes": 10,
+  "total_elapsed_seconds": 240.372956,
+  "success_count": 0,
+  "success_rate": 0.0,
+  "gridlock_count": 10,
+  "gridlock_rate": 1.0,
+  "training_details": [
+    {
+      "episode": 0,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 1,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 2,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 3,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 4,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 5,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 6,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 7,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 8,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 9,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    }
+  ]
+}

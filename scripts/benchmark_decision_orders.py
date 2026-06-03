@@ -38,12 +38,12 @@ from its_signal_control.metrics import (
 
 
 STRATEGIES = [
-    #("unified", "對照組：同時決策（無鄰近資訊）"),
-    #("distance_decay", "距離遞減：距離事故最遠優先決策"),
+    ("unified", "對照組：同時決策（無鄰近資訊）"),
+    ("distance_decay", "距離遞減：距離事故最遠優先決策"),
     ("checkerboard", "棋盤式：對角線不相鄰，最小衝突"),
     ("ring", "環形：外向內螺旋排列"),
-    #("greedy_dynamic", "動態貪心：根據隊列長度排序"),
-    #("random", "隨機順序：基準對照"),
+    ("greedy_dynamic", "動態貪心：根據隊列長度排序"),
+    ("random", "隨機順序：基準對照"),
 ]
 
 NUM_EPISODES_PER_STRATEGY = 10

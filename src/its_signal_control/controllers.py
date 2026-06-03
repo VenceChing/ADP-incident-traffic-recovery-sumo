@@ -71,7 +71,7 @@ def get_action_pressure_features(
         )
     return scores, downstream_queues, downstream_capacities
 
-
+'''
 def select_adp_action(
     agent_id: str,
     agent: ADPAgent,
@@ -82,47 +82,118 @@ def select_adp_action(
     incident_edges: list[str],
     epsilon: float,
     context: dict[str, Any],
+    neighbor_actions: dict[str, int] | None = None,
+    neighbor_phases: dict[str, int] | None = None,
+    neighbor_queues: dict[str, float] | None = None,
 ) -> tuple[int, list[float]]:
     incident_active = sim_time >= INCIDENT_TIME
     dist_to_incident = get_incident_distance(agent_id, incident_edges)
     incident_direction = get_incident_direction(agent_id, incident_edges)
     time_discrete = 0 if sim_time < INCIDENT_TIME else int((sim_time - INCIDENT_TIME) // DECISION_INTERVAL)
     action_pressures, downstream_queues, downstream_capacities = get_action_pressure_features(agent_id, context)
-    q_values = agent.estimate_action_values(
+    
+    # 提取特徵（包含鄰近信息）
+    features = agent.extract_features(
         current_queues,
-        baseline_queues,
-        TAU,
         current_phase,
         dist_to_incident,
         incident_direction,
         time_discrete,
-        is_gridlock=False,
-        incident_active=incident_active,
-        gamma=GAMMA,
-        incident_edges=incident_edges,
+        incident_active,
         action_pressures=action_pressures,
         downstream_queues=downstream_queues,
         downstream_capacities=downstream_capacities,
+        neighbor_actions=neighbor_actions,
+        neighbor_phases=neighbor_phases,
+        neighbor_queues=neighbor_queues,
     )
-    action = agent.select_action(
-        current_queues,
-        baseline_queues,
-        TAU,
-        current_phase,
-        dist_to_incident,
-        incident_direction,
-        time_discrete,
-        is_gridlock=False,
-        incident_active=incident_active,
-        epsilon=epsilon,
-        gamma=GAMMA,
-        incident_edges=incident_edges,
-        action_pressures=action_pressures,
-        downstream_queues=downstream_queues,
-        downstream_capacities=downstream_capacities,
-    )
+    
+    # 計算所有動作的 Q 值（使用鄰近特徵）
+    q_values = []
+    for candidate_action in range(agent.num_phases):
+        candidate_features = agent.extract_features(
+            current_queues,
+            current_phase,
+            dist_to_incident,
+            incident_direction,
+            time_discrete,
+            incident_active,
+            action=candidate_action,
+            action_pressures=action_pressures,
+            downstream_queues=downstream_queues,
+            downstream_capacities=downstream_capacities,
+            neighbor_actions=neighbor_actions,
+            neighbor_phases=neighbor_phases,
+            neighbor_queues=neighbor_queues,
+        )
+        #print(f"Candidate action {candidate_action} features: {candidate_features}")
+        q_value = sum(w * f for w, f in zip(agent.weights, candidate_features))
+        q_values.append(q_value)
+    
+    # ε-貪心選擇
+    import random
+    if random.random() < epsilon:
+        action = random.choice(range(agent.num_phases))
+    else:
+        action = max(range(agent.num_phases), key=lambda a: q_values[a])
+    
     return action, q_values
-
+'''
+def select_adp_action(
+    agent_id: str,
+    agent: ADPAgent,
+    current_queues: dict[str, float],
+    baseline_queues: dict[str, float],
+    current_phase: int,
+    sim_time: float,
+    incident_edges: list[str],
+    epsilon: float,
+    context: dict[str, Any],
+    neighbor_actions: dict[str, int] | None = None,
+    neighbor_phases: dict[str, int] | None = None,
+    neighbor_queues: dict[str, float] | None = None,
+) -> tuple[int, list[float]]:
+    import random
+    
+    # 1. 基礎環境狀態與時間參數計算
+    incident_active = sim_time >= INCIDENT_TIME
+    dist_to_incident = get_incident_distance(agent_id, incident_edges)
+    incident_direction = get_incident_direction(agent_id, incident_edges)
+    time_discrete = 0 if sim_time < INCIDENT_TIME else int((sim_time - INCIDENT_TIME) // DECISION_INTERVAL)
+    action_pressures, downstream_queues, downstream_capacities = get_action_pressure_features(agent_id, context)
+    
+    is_gridlock = context.get("is_gridlock", False) # 從模擬上下文或狀態獲取是否死鎖
+    
+    # 3. 🚨 核心改動：呼叫你寫好的新邏輯來估算所有動作的 Q 值（內部已包含鄰居訊息與預測）
+    q_values = agent.estimate_action_values(
+        current_queues=current_queues,
+        baseline_queues=baseline_queues,
+        tau=TAU,
+        current_phase=current_phase,
+        dist_to_incident=dist_to_incident,
+        incident_direction=incident_direction,
+        time_discrete=time_discrete,
+        is_gridlock=is_gridlock,
+        incident_active=incident_active,
+        gamma=GAMMA,
+        incident_edges=incident_edges,
+        action_pressures=action_pressures,
+        downstream_queues=downstream_queues,
+        downstream_capacities=downstream_capacities,
+        neighbor_actions=neighbor_actions,  # 順利傳遞鄰居動作
+        neighbor_phases=neighbor_phases,    # 順利傳遞鄰居相位
+        neighbor_queues=neighbor_queues,    # 順利傳遞鄰居隊列
+    )
+    
+    # 4. ε-貪心策略選擇動作
+    if random.random() < epsilon:
+        # 隨機探索
+        action = random.choice(range(agent.num_phases))
+    else:
+        # 根據剛剛計算出來包含鄰居考量的新 Q 值，選擇最優動作
+        action = max(range(agent.num_phases), key=lambda a: q_values[a])
+        
+    return action, q_values
 
 def update_adp_agents(
     agents: dict[str, ADPAgent],
@@ -134,7 +205,10 @@ def update_adp_agents(
     incident_edges: list[str],
     is_gridlock: bool,
     context: dict[str, Any],
+    neighbor_info: dict[str, tuple[dict[str, int], dict[str, int], dict[str, float]]] | None = None,
 ) -> None:
+    neighbor_info = neighbor_info or {}
+    
     for agent_id, agent in agents.items():
         incident_active = sim_time >= INCIDENT_TIME
         next_queues = get_agent_queues(env, agent_id, sim_time, incident_edges)
@@ -142,6 +216,12 @@ def update_adp_agents(
         incident_direction = get_incident_direction(agent_id, incident_edges)
         time_discrete = 0 if sim_time < INCIDENT_TIME else int((sim_time - INCIDENT_TIME) // DECISION_INTERVAL)
         action_pressures, downstream_queues, downstream_capacities = get_action_pressure_features(agent_id, context)
+        
+        # 獲取鄰近信息
+        neighbor_actions, neighbor_phases, neighbor_queues = neighbor_info.get(
+            agent_id, ({}, {}, {})
+        )
+        
         reward = agent.calculate_reward(
             next_queues,
             baseline_queues,
@@ -157,6 +237,8 @@ def update_adp_agents(
             step_cache[agent_id]["action"],
             blocked_edges=incident_edges,
         )
+        
+        # 計算下一狀態的最優動作（包含鄰近信息）
         next_action = max(
             range(agent.num_phases),
             key=lambda candidate_action: agent.get_value(
@@ -171,9 +253,14 @@ def update_adp_agents(
                     action_pressures=action_pressures,
                     downstream_queues=downstream_queues,
                     downstream_capacities=downstream_capacities,
+                    neighbor_actions=neighbor_actions,
+                    neighbor_phases=neighbor_phases,
+                    neighbor_queues=neighbor_queues,
                 )
             ),
         )
+        
+        # 提取下一狀態特徵（包含鄰近信息）
         next_features = agent.extract_features(
             next_queues,
             python_current_phases[agent_id],
@@ -185,7 +272,12 @@ def update_adp_agents(
             action_pressures=action_pressures,
             downstream_queues=downstream_queues,
             downstream_capacities=downstream_capacities,
+            neighbor_actions=neighbor_actions,
+            neighbor_phases=neighbor_phases,
+            neighbor_queues=neighbor_queues,
         )
+        
+        # 更新權重（使用含鄰近信息的特徵）
         agent.update_weights(
             step_cache[agent_id]["features"],
             reward,

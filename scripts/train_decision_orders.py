@@ -32,14 +32,14 @@ from its_signal_control.metrics import save_agent_weights, reset_agent_weights
 
 # 訓練配置
 STRATEGIES_TO_TRAIN = [
-    #("distance_decay", "距離遞減：距離事故最遠優先決策"),
+    ("distance_decay", "距離遞減：距離事故最遠優先決策"),
     ("checkerboard", "棋盤式：對角線不相鄰，最小衝突"),
     ("ring", "環形：外向內螺旋排列"),
-    #("greedy_dynamic", "動態貪心：根據隊列長度排序"),
-    #("random", "隨機順序：基準對照"),
+    ("greedy_dynamic", "動態貪心：根據隊列長度排序"),
+    ("random", "隨機順序：基準對照"),
 ]
 
-TRAIN_EPISODES_PER_STRATEGY = 10  # 每個策略訓練 50 個 episode
+TRAIN_EPISODES_PER_STRATEGY = 30  # 每個策略訓練 50 個 episode
 NUM_PHASES = 4
 
 
@@ -85,6 +85,7 @@ def train_strategy(
         config.ALLOW_NEIGHBOR_INFO = True  # 訓練時啟用鄰近信息
         config.LOAD_WEIGHTS_FOR_EVALUATION = False  # 不載入舊權重
         config.RESET_WEIGHTS_FOR_TRAINING = True  # 重置權重
+        print(f"\n配置已設定: DECISION_ORDER_STRATEGY={config.DECISION_ORDER_STRATEGY}, ALLOW_NEIGHBOR_INFO={config.ALLOW_NEIGHBOR_INFO}")
 
         # Step 1: 重置所有 agent 的權重（清零）
         print(f"\n[Step 1/3] 重置權重（清零所有 {len(agents)} 個路口）...")
@@ -344,8 +345,8 @@ def main():
     print(f"\n{'#'*70}")
     print(f"# Step 1/6: 訓練對照組 (Unified)")
     print(f"{'#'*70}")
-    #summary = train_unified_baseline(env, agents, context, train_incident_edges, training_root)
-    #training_summaries["unified"] = summary
+    summary = train_unified_baseline(env, agents, context, train_incident_edges, training_root)
+    training_summaries["unified"] = summary
 
     # Step 2-6: 訓練各策略（含鄰近信息）
     for idx, (strategy, description) in enumerate(STRATEGIES_TO_TRAIN, 2):

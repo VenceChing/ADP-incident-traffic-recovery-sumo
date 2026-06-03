@@ -321,7 +321,7 @@ class ADPAgent:
     def get_value(self, features: list[float]) -> float:
         value = sum(w * x for w, x in zip(self.weights, features))
         return value if math.isfinite(value) else 0.0
-
+    '''
     def estimate_state_value(
         self,
         current_queues: Dict[str, float],
@@ -349,6 +349,46 @@ class ADPAgent:
                 downstream_capacities=downstream_capacities,
             )
             values.append(self.get_value(features))
+        return max(values) if values else 0.0
+
+    '''
+    def estimate_state_value(
+        self,
+        current_queues: Dict[str, float],
+        current_phase: int,
+        dist_to_incident: float,
+        incident_direction: int | None,
+        time_discrete: int,
+        incident_active: bool,
+        action_pressures: list[float] | None = None,
+        downstream_queues: list[float] | None = None,
+        downstream_capacities: list[float] | None = None,
+        # === 新增：接收鄰近路口訊息 ===
+        neighbor_actions: dict[str, int] | None = None,
+        neighbor_phases: dict[str, int] | None = None,
+        neighbor_queues: dict[str, float] | None = None,
+    ) -> float:
+        values = []
+        for candidate_action in range(self.num_phases):
+            # 🚨 關鍵修正：提取未來特徵時，把鄰居資訊完整餵給神經網路/權重模型
+            features = self.extract_features(
+                current_queues,
+                current_phase,
+                dist_to_incident,
+                incident_direction,
+                time_discrete,
+                incident_active,
+                action=candidate_action,
+                action_pressures=action_pressures,
+                downstream_queues=downstream_queues,
+                downstream_capacities=downstream_capacities,
+                # === 新增：對接 extract_features 的鄰居參數 ===
+                neighbor_actions=neighbor_actions,
+                neighbor_phases=neighbor_phases,
+                neighbor_queues=neighbor_queues,
+            )
+            values.append(self.get_value(features))
+            
         return max(values) if values else 0.0
 
     def predict_next_features(
@@ -424,7 +464,7 @@ class ADPAgent:
         )
         best_action = max(range(self.num_phases), key=lambda action: q_values[action])
         return best_action
-
+    '''
     def estimate_action_values(
         self,
         current_queues: Dict[str, float],
@@ -528,6 +568,162 @@ class ADPAgent:
             if edge_id in green_edges or edge_id in blocked_edge_set:
                 continue
             next_queues[edge_id] = next_queues.get(edge_id, 0.0) + self._red_arrival_for_edge(edge_id)
+        return next_queues
+    '''
+    def estimate_action_values(
+        self,
+        current_queues: Dict[str, float],
+        baseline_queues: Dict[str, float],
+        tau: float,
+        current_phase: int,
+        dist_to_incident: float,
+        incident_direction: int | None,
+        time_discrete: int,
+        is_gridlock: bool,
+        incident_active: bool,
+        gamma: float,
+        incident_edges: list[str] | None = None,
+        action_pressures: list[float] | None = None,
+        downstream_queues: list[float] | None = None,
+        downstream_capacities: list[float] | None = None,
+        # === 新增：接收鄰居資訊 ===
+        neighbor_actions: dict[str, int] | None = None,
+        neighbor_phases: dict[str, int] | None = None,
+        neighbor_queues: dict[str, float] | None = None,
+    ) -> list[float]:
+        q_values = [float("-inf")] * self.num_phases
+        best_action = 0
+        max_q = float("-inf")
+        
+        for action in range(self.num_phases):
+            # 1. 預測下一階段隊列（傳入鄰居隊列與動作以優化物理預測）
+            predicted_queues = self.predict_next_queues(
+                current_queues,
+                action,
+                downstream_queues=downstream_queues,
+                downstream_capacities=downstream_capacities,
+                blocked_edges=incident_edges,
+                neighbor_actions=neighbor_actions,  # 傳入鄰居動作
+                neighbor_queues=neighbor_queues,    # 傳入鄰居隊列
+            )
+            
+            served_queue = sum(
+                current_queues.get(edge_id, 0.0)
+                for edge_id in self.action_edges[action]
+            )
+            
+            reward = self.calculate_reward(
+                predicted_queues,
+                baseline_queues,
+                tau,
+                current_phase,
+                action,
+                is_gridlock,
+                incident_edges=incident_edges,
+            )
+            
+            # 2. 評估未來狀態價值（將鄰居訊息餵給 AI 大腦的神經網路特徵）
+            future_value = self.estimate_state_value(
+                predicted_queues,
+                action,
+                dist_to_incident,
+                incident_direction,
+                time_discrete,
+                incident_active,
+                action_pressures,
+                downstream_queues,
+                downstream_capacities,
+                # === 關鍵：讓大腦在預估未來時看見鄰居 ===
+                neighbor_actions=neighbor_actions,
+                neighbor_phases=neighbor_phases,
+                neighbor_queues=neighbor_queues,
+            )
+            
+            # 貝爾曼方程 (Bellman Equation) 計算 Q 值
+            q_value = reward + gamma * future_value
+            
+            # 啟發式排隊權重項目
+            q_value += self.queue_priority_weight * served_queue / self.queue_scale
+            
+            import math
+            if not math.isfinite(q_value):
+                continue
+                
+            q_values[action] = q_value
+            
+            # 除錯追蹤（可選）
+            # if getattr(self, "agent_id", "") == "A3":
+            #     print(f"[📊 鄰居協同 Q值] 行動 {action} | Reward: {reward:.2f} | Future(看見鄰居): {gamma * future_value:.2f} | 總分: {q_value:.2f}")
+                
+            if q_value > max_q:
+                max_q = q_value
+                best_action = action
+
+        if max_q == float("-inf"):
+            q_values = [0.0] * self.num_phases
+        return q_values
+
+    def predict_next_queues(
+        self,
+        current_queues: Dict[str, float],
+        action: int,
+        downstream_queues: list[float] | None = None,
+        downstream_capacities: list[float] | None = None,
+        blocked_edges: list[str] | None = None,
+        # === 新增參數 ===
+        neighbor_actions: dict[str, int] | None = None,
+        neighbor_queues: dict[str, float] | None = None,
+    ) -> Dict[str, float]:
+        next_queues = dict(current_queues)
+        blocked_edge_set = set(blocked_edges or [])
+        
+        # 處理事故封鎖路段
+        for blocked_edge in blocked_edge_set:
+            if blocked_edge in next_queues:
+                next_queues[blocked_edge] = 0.0
+                
+        green_edges = set(self.action_edges[action]) if 0 <= action < len(self.action_edges) else set()
+        
+        # 基礎下游資訊
+        downstream_queue = downstream_queues[action] if downstream_queues and 0 <= action < len(downstream_queues) else 0.0
+        downstream_capacity = downstream_capacities[action] if downstream_capacities and 0 <= action < len(downstream_capacities) else self.unbounded_downstream_capacity
+        
+        # === 鄰居物理修正微調 (意圖考量) ===
+        # 如果鄰居隊列過高，會壓縮你的自由放行空間 (Downstream Pressure 修正)
+        if neighbor_queues:
+            # 算出鄰居平均排隊長度，若鄰居爆滿，動態調降可用自由空間
+            avg_neighbor_queue = sum(neighbor_queues.values()) / max(1, len(neighbor_queues))
+            if avg_neighbor_queue > 15.0:  # 門檻值可依路網調整
+                downstream_capacity *= 0.8  # 下游回堵導致放行效率打折
+                
+        free_space = max(0.0, downstream_capacity - downstream_queue)
+        per_edge_free_space = free_space / max(1, len(green_edges))
+        
+        # 1. 綠燈車道：釋放排隊車流
+        for green_edge in green_edges:
+            if green_edge in blocked_edge_set:
+                continue
+            green_discharge = min(self._green_discharge_for_edge(green_edge), per_edge_free_space)
+            next_queues[green_edge] = max(0.0, next_queues.get(green_edge, 0.0) - green_discharge)
+            
+        # 2. 紅燈車道（或其他未放行車道）：累積車流
+        for edge_id in self.incoming_edges:
+            if edge_id in green_edges or edge_id in blocked_edge_set:
+                continue
+                
+            # 基礎流入速率
+            arrival_rate = self._red_arrival_for_edge(edge_id)
+            
+            # === 鄰居物理修正：上游放水效應 ===
+            # 如果你的上游鄰居（Neighbor）正開著綠燈（假設鄰居動作代表對你放水），流入量應變大
+            if neighbor_actions:
+                # 這裡可以用簡單的啟發式：若鄰居有動作正在對該車道塞車，代表外來車流增加
+                active_neighbors = sum(1 for act in neighbor_actions.values() if act > 0)
+                if active_neighbors > 0:
+                    arrival_rate *= (1.0 + 0.2 * active_neighbors) # 每個綠燈鄰居額外增加 20% 流入車流
+                    
+            next_queues[edge_id] = next_queues.get(edge_id, 0.0) + arrival_rate
+            
         return next_queues
 
     def update_transition_model(

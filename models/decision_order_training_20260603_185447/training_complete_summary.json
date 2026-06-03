@@ -1,0 +1,122 @@
+{
+  "timestamp": "2026-06-03T18:56:10.314702",
+  "training_config": {
+    "episodes_per_strategy": 1,
+    "feature_dimension_no_neighbor": 30,
+    "feature_dimension_with_neighbor": 66
+  },
+  "strategies": {
+    "unified": {
+      "strategy": "unified",
+      "description": "同時決策，無鄰近資訊（基準對照）",
+      "feature_dimension": 30,
+      "allow_neighbor_info": false,
+      "training_episodes": 1,
+      "total_elapsed_seconds": 13.308493,
+      "success_count": 1,
+      "success_rate": 1.0,
+      "gridlock_count": 0,
+      "gridlock_rate": 0.0
+    },
+    "distance_decay": {
+      "strategy": "distance_decay",
+      "description": "距離遞減：距離事故最遠優先決策",
+      "feature_dimension": 30,
+      "allow_neighbor_info": true,
+      "training_episodes": 1,
+      "total_elapsed_seconds": 13.401569,
+      "success_count": 1,
+      "success_rate": 1.0,
+      "gridlock_count": 0,
+      "gridlock_rate": 0.0,
+      "training_details": [
+        {
+          "episode": 0,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        }
+      ]
+    },
+    "checkerboard": {
+      "strategy": "checkerboard",
+      "description": "棋盤式：對角線不相鄰，最小衝突",
+      "feature_dimension": 30,
+      "allow_neighbor_info": true,
+      "training_episodes": 1,
+      "total_elapsed_seconds": 12.92573,
+      "success_count": 1,
+      "success_rate": 1.0,
+      "gridlock_count": 0,
+      "gridlock_rate": 0.0,
+      "training_details": [
+        {
+          "episode": 0,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        }
+      ]
+    },
+    "ring": {
+      "strategy": "ring",
+      "description": "環形：外向內螺旋排列",
+      "feature_dimension": 30,
+      "allow_neighbor_info": true,
+      "training_episodes": 1,
+      "total_elapsed_seconds": 13.161282,
+      "success_count": 1,
+      "success_rate": 1.0,
+      "gridlock_count": 0,
+      "gridlock_rate": 0.0,
+      "training_details": [
+        {
+          "episode": 0,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        }
+      ]
+    },
+    "greedy_dynamic": {
+      "strategy": "greedy_dynamic",
+      "description": "動態貪心：根據隊列長度排序",
+      "feature_dimension": 30,
+      "allow_neighbor_info": true,
+      "training_episodes": 1,
+      "total_elapsed_seconds": 15.694726,
+      "success_count": 1,
+      "success_rate": 1.0,
+      "gridlock_count": 0,
+      "gridlock_rate": 0.0,
+      "training_details": [
+        {
+          "episode": 0,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        }
+      ]
+    },
+    "random": {
+      "strategy": "random",
+      "description": "隨機順序：基準對照",
+      "feature_dimension": 30,
+      "allow_neighbor_info": true,
+      "training_episodes": 1,
+      "total_elapsed_seconds": 13.530404,
+      "success_count": 1,
+      "success_rate": 1.0,
+      "gridlock_count": 0,
+      "gridlock_rate": 0.0,
+      "training_details": [
+        {
+          "episode": 0,
+          "status": "SUCCESS",
+          "success": true,
+          "gridlock": false
+        }
+      ]
+    }
+  }
+}

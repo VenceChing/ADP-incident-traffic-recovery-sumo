@@ -64,7 +64,7 @@ class DecisionOrderSchedule:
             return self._random_order()
         else:
             raise ValueError(f"Unknown strategy: {self.strategy}")
-
+    '''
     def _parse_agent_coords(self, agent_id: str) -> tuple[int, int] | None:
         """從 agent_id 解析座標（如 "ti_0_1" -> (0, 1)）"""
         try:
@@ -74,6 +74,7 @@ class DecisionOrderSchedule:
         except (ValueError, IndexError):
             pass
         return None
+    '''
 
     def _distance_decay_order(self) -> list[str]:
         """距離遞減：距離事故最遠的路口優先決策"""
@@ -103,9 +104,10 @@ class DecisionOrderSchedule:
 
         # 降序排列（距離遠的優先）
         return sorted(self.agent_ids, key=distance_to_incident, reverse=True)
-
+    '''
     def _checkerboard_order(self) -> list[str]:
         """棋盤式：對角線不相鄰，偶數行列優先"""
+        print(f"Building checkerboard order for agents: {self.agent_ids}")
         even = []
         odd = []
         for agent_id in sorted(self.agent_ids):
@@ -116,7 +118,63 @@ class DecisionOrderSchedule:
                     even.append(agent_id)
                 else:
                     odd.append(agent_id)
+
+        print(f"Checkerboard order - even: {even}, odd: {odd}")
         return even + odd
+    '''
+    def _parse_agent_coords(self, agent_id: str) -> tuple[int, int] | None:
+        """
+        將類似 'A3', 'B2', 'C0' 的路口 ID 轉換為 (x, y) 網格座標。
+        A->0, B->1, C->2, D->3...
+        """
+        try:
+            agent_id = agent_id.strip()
+            if len(agent_id) < 2:
+                return None
+                
+            # 1. 處理第一個字元（字母）當作 X 軸：A=0, B=1, C=2...
+            x_letter = agent_id[0].upper()
+            if not x_letter.isalpha():
+                return None
+            x = ord(x_letter) - ord('A')
+            
+            # 2. 處理後面的字元（數字）當作 Y 軸：'3'->3
+            y_str = agent_id[1:]
+            if not y_str.isdigit():
+                return None
+            y = int(y_str)
+            
+            return (x, y)
+        except Exception:
+            return None
+
+    def _checkerboard_order(self) -> list[str]:
+        """棋盤式：對角線不相鄰，偶數行列優先"""
+        print(f"\n[棋盤排序] 開始處理 Agent 列表: {self.agent_ids}")
+        even = []
+        odd = []
+        
+        for agent_id in sorted(self.agent_ids):
+            coords = self._parse_agent_coords(agent_id)
+            
+            if coords is not None:
+                x, y = coords
+                # 印出詳細解析過程，方便你對照
+                print(f"  -> 路口 {agent_id} 成功解析為座標: ({x}, {y}) | 和為: {x+y}")
+                
+                if (x + y) % 2 == 0:
+                    even.append(agent_id)
+                else:
+                    odd.append(agent_id)
+            else:
+                # 如果還是解析失敗，會跳出警告，但不會讓程式崩潰
+                print(f"  ⚠️ [警告] 無法解析路口 {agent_id} 的座標，此路口將被跳過！")
+
+        print(f"[棋盤排序結果] - 偶數組(even): {even}, 奇數組(odd): {odd}")
+        
+        final_order = even + odd
+        print(f"[完成] 最終回傳順序: {final_order}\n")
+        return final_order
 
     def _ring_order(self) -> list[str]:
         """環形：外向內螺旋排列"""
@@ -169,16 +227,25 @@ class DecisionOrderSchedule:
         return sorted(self.agent_ids, key=total_queue, reverse=True)
 
     def get_neighbors(self, agent_id: str) -> list[str]:
-        """獲取某路口的相鄰路口（4連通）"""
+        """獲取某路口的相鄰路口（4連通），支援 A0, B1 字母網格格式"""
         coords = self._parse_agent_coords(agent_id)
         if coords is None:
             return []
 
         x, y = coords
         neighbors = []
+        
+        # 4連通：左、右、下、上
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nx, ny = x + dx, y + dy
-            neighbor_id = f"ti_{nx}_{ny}"
-            if neighbor_id in self.agent_ids:
-                neighbors.append(neighbor_id)
+            
+            # 🚨 關鍵修正：將數字 nx 轉回對應的英文字母 (0->A, 1->B, 2->C...)
+            if nx >= 0:
+                nx_letter = chr(ord('A') + nx)
+                neighbor_id = f"{nx_letter}{ny}"  # 拼出像 'A1', 'B0' 的格式
+                
+                # 檢查這個鄰居是不是真的存在於路網中
+                if neighbor_id in self.agent_ids:
+                    neighbors.append(neighbor_id)
+                    
         return neighbors
