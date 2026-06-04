@@ -1,6 +1,6 @@
-RATE: 2500
+RATE: 5000
 ROUTE_FILE_PREFIX: "map2"
-ROUTE_FILE: "map2_rate2500.rou.xml"
+ROUTE_FILE: "map2_rate5000.rou.xml"
 SCENARIO_DIR: "scenarios/real_world2"
 SUMO_CONFIG: "map2.sumocfg"
 NETWORK_FILE: "map2.net.xml"
@@ -15,7 +15,7 @@ RESULTS_DIR: "C:/ai/final_project/final_version/ADP-incident-traffic-recovery-su
 RANDOM_SEED: 7
 DEMO_SEED: 20007
 DEMO_CONTROLLER: "fixed_time_rr"
-DEMO_INCIDENT_EDGES: []
+DEMO_INCIDENT_EDGES: ["321783219#2", "327267393#8"]
 TIME: 1180
 INCIDENT_TIME: 150
 BASELINE_WARMUP_TIME: 60.0

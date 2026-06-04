@@ -215,6 +215,28 @@ def _parse_scalar(value: str) -> Any:
         return value.strip("\"'")
 
 
+def _strip_yaml_comment(line: str) -> str:
+    quote: str | None = None
+    escaped = False
+    for idx, char in enumerate(line):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            continue
+        if char in {"'", "\""}:
+            quote = char
+            continue
+        if char == "#":
+            return line[:idx]
+    return line
+
+
 def load_preset(path: str | os.PathLike[str]) -> dict[str, Any]:
     """Load a small flat YAML preset without requiring PyYAML at runtime."""
     preset_path = Path(path)
@@ -222,7 +244,7 @@ def load_preset(path: str | os.PathLike[str]) -> dict[str, Any]:
         preset_path = REPO_ROOT / preset_path
     data: dict[str, Any] = {}
     for raw_line in preset_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.split("#", 1)[0].strip()
+        line = _strip_yaml_comment(raw_line).strip()
         if not line or ":" not in line:
             continue
         key, value = line.split(":", 1)
