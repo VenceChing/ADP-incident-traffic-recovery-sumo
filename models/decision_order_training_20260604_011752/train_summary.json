@@ -1,0 +1,194 @@
+{
+  "strategy": "random",
+  "description": "隨機順序：基準對照",
+  "feature_dimension": 30,
+  "allow_neighbor_info": true,
+  "training_episodes": 30,
+  "total_elapsed_seconds": 546.925311,
+  "success_count": 24,
+  "success_rate": 0.8,
+  "gridlock_count": 3,
+  "gridlock_rate": 0.1,
+  "training_details": [
+    {
+      "episode": 0,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 1,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 2,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 3,
+      "status": "TIMEOUT",
+      "success": false,
+      "gridlock": false
+    },
+    {
+      "episode": 4,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 5,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 6,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 7,
+      "status": "TIMEOUT",
+      "success": false,
+      "gridlock": false
+    },
+    {
+      "episode": 8,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 9,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 10,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 11,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 12,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 13,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 14,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 15,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 16,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 17,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 18,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 19,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 20,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 21,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 22,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 23,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 24,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 25,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 26,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 27,
+      "status": "SUCCESS",
+      "success": true,
+      "gridlock": false
+    },
+    {
+      "episode": 28,
+      "status": "GRIDLOCK",
+      "success": false,
+      "gridlock": true
+    },
+    {
+      "episode": 29,
+      "status": "TIMEOUT",
+      "success": false,
+      "gridlock": false
+    }
+  ]
+}
