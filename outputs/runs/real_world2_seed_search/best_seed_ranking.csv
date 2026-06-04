@@ -1,0 +1,4 @@
+rank,map,seed,controller_used_for_ranking,episodes,success_rate,gridlock_rate,mean_ttr_success_only,mean_queue_excess_area,mean_throughput_recovery,run_dir
+1,real_world2,17,adp,4,1.0,0.0,268.75,2895.84625,2.173889,C:\ai\final_project\final_version\ADP-incident-traffic-recovery-sumo\outputs\runs\real_world2_seed_search\seed_17\adp
+2,real_world2,7,adp,4,0.75,0.0,261.6666666666667,4836.16195,1.97166675,C:\ai\final_project\final_version\ADP-incident-traffic-recovery-sumo\outputs\runs\real_world2_seed_search\seed_7\adp
+3,real_world2,27,adp,4,0.5,0.0,235.0,6480.134475000001,1.924352,C:\ai\final_project\final_version\ADP-incident-traffic-recovery-sumo\outputs\runs\real_world2_seed_search\seed_27\adp

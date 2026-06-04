@@ -1,0 +1,11 @@
+<configuration>
+  <input>
+    <net-file value="map2.net.xml"/>
+    <route-files value="map2_rate1000.rou.xml"/>
+  </input>
+  <time>
+    <begin value="0"/>
+    <end value="700"/>
+    <step-length value="1.0"/>
+  </time>
+</configuration>

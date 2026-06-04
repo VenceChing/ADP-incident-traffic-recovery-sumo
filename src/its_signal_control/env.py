@@ -74,11 +74,17 @@ class SumoEnv:
             lane_count = max(1, traci.edge.getLaneNumber(edge_id))
             for lane_index in range(lane_count):
                 veh_id = f"accident_{edge_id}" if lane_count == 1 else f"accident_{edge_id}_{lane_index}"
+                lane_id = f"{edge_id}_{lane_index}"
+                try:
+                    lane_length = traci.lane.getLength(lane_id)
+                    stop_pos = max(0.1, min(10.0, lane_length - 0.1))
+                except traci.TraCIException:
+                    stop_pos = 0.1
                 try:
                     traci.vehicle.add(
                         vehID=veh_id,
                         routeID=route_id,
-                        departPos="10",
+                        departPos=str(stop_pos),
                         departLane=str(lane_index),
                         departSpeed="0",
                     )
@@ -92,7 +98,7 @@ class SumoEnv:
                     traci.vehicle.setStop(
                         veh_id,
                         edge_id,
-                        pos=10,
+                        pos=stop_pos,
                         laneIndex=lane_index,
                         duration=1.0e9,
                     )

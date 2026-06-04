@@ -45,6 +45,8 @@ class DecisionOrderSchedule:
         agent_ids: list[str] | None = None,
         incident_edges: list[str] | None = None,
         random_seed: int = 42,
+        agent_positions: dict[str, tuple[float, float]] | None = None,
+        neighbor_map: dict[str, list[str]] | None = None,
     ) -> None:
         if strategy not in self.VALID_STRATEGIES:
             raise ValueError(
@@ -55,7 +57,22 @@ class DecisionOrderSchedule:
         self.agent_ids = list(agent_ids or [])
         self.incident_edges = list(incident_edges or [])
         self.random_seed = random_seed
+        self.agent_positions = dict(agent_positions or {})
+        self.neighbor_map = {agent_id: list(neighbors) for agent_id, neighbors in (neighbor_map or {}).items()}
+        self._position_coords = self._build_position_coords()
         self._static_order = self._build_static_order()
+
+    def _build_position_coords(self) -> dict[str, tuple[int, int]]:
+        if not self.agent_positions:
+            return {}
+        xs = sorted({position[0] for position in self.agent_positions.values()})
+        ys = sorted({position[1] for position in self.agent_positions.values()})
+        x_rank = {value: index for index, value in enumerate(xs)}
+        y_rank = {value: index for index, value in enumerate(ys)}
+        return {
+            agent_id: (x_rank[position[0]], y_rank[position[1]])
+            for agent_id, position in self.agent_positions.items()
+        }
 
     def _build_static_order(self) -> list[str]:
         if self.strategy in {"unified", "greedy_dynamic", "queue_length_decay", "queue_length_premium"}:
@@ -86,6 +103,9 @@ class DecisionOrderSchedule:
         return list(self._static_order)
 
     def _agent_coords(self, agent_id: str) -> tuple[int, int] | None:
+        if agent_id in self._position_coords:
+            return self._position_coords[agent_id]
+
         if len(agent_id) >= 2 and agent_id[0].isalpha() and agent_id[1:].isdigit():
             return ord(agent_id[0].upper()) - ord("A"), int(agent_id[1:])
 
@@ -109,6 +129,18 @@ class DecisionOrderSchedule:
         return from_coords, to_coords
 
     def _distance_to_incident(self, agent_id: str) -> float:
+        if agent_id in self.agent_positions and self.incident_edges:
+            x, y = self.agent_positions[agent_id]
+            distances: list[float] = []
+            for edge_id in self.incident_edges:
+                endpoints = self._edge_endpoints(edge_id)
+                if endpoints is None:
+                    continue
+                for ex, ey in endpoints:
+                    distances.append(abs(x - ex) + abs(y - ey))
+            if distances:
+                return min(distances)
+
         coords = self._agent_coords(agent_id)
         if coords is None or not self.incident_edges:
             return 0.0
@@ -210,6 +242,9 @@ class DecisionOrderSchedule:
 
     def get_neighbors(self, agent_id: str) -> list[str]:
         """Return 4-connected neighboring agents in stable spatial slot order."""
+        if self.neighbor_map:
+            return list(self.neighbor_map.get(agent_id, []))
+
         coords = self._agent_coords(agent_id)
         if coords is None:
             return []

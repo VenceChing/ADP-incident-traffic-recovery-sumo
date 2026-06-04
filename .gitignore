@@ -9,6 +9,9 @@ venv/
 
 outputs/*
 !outputs/.gitkeep
+outputs/runs/real_world*/
+outputs/runs/*_seed_search/
+outputs/runs/*debug*/
 results/
 results_*/
 results_archive/
@@ -29,7 +32,14 @@ tmp.*.xml
 !outputs/runs/selected_methods_vs_baselines/*.svg
 !models/**/*.json
 !configs/**/*.yaml
+configs/generated_seed_sweeps/
 !scenarios/**/*.net.xml
 !scenarios/**/*.rou.xml
 !scenarios/**/*.sumocfg
 !scenarios/**/*.xml
+scenarios/**/outputs/
+scenarios/**/trips.trips.xml
+scenarios/**/route_tmp/
+scenarios/real_world/map_rate1000.rou.xml
+scenarios/real_world/map_rate2500.rou.xml
+scenarios/real_world/map_rate6000.rou.xml

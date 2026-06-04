@@ -43,7 +43,10 @@ from .traffic_model import (
     build_sumo_args,
     build_tls_state,
     check_episode_status,
+    filter_vehicle_edge_ids,
     format_incident_direction,
+    get_agent_neighbor_map,
+    get_agent_positions,
     get_incident_distance,
     get_incident_direction,
     get_queue_excess,
@@ -123,7 +126,9 @@ def run_episode(
 
     print(f"--- {phase.upper()} {controller} episode {episode} seed={seed} incident={incident_edges} ---")
 
-    edge_ids = [edge_id for edge_id in traci.edge.getIDList() if not edge_id.startswith(":")]
+    edge_ids = filter_vehicle_edge_ids(
+        [edge_id for edge_id in traci.edge.getIDList() if not edge_id.startswith(":")]
+    )
     if RENDER_STRESS:
         env.init_stress_polygons(edge_ids)
 
@@ -183,6 +188,8 @@ def run_episode(
         agent_ids=list(agents.keys()),
         incident_edges=incident_edges,
         random_seed=DECISION_ORDER_RANDOM_SEED + episode,
+        agent_positions=get_agent_positions(list(agents.keys())),
+        neighbor_map=get_agent_neighbor_map(list(agents.keys())),
     )
     decision_cache = DecisionCache()
 
@@ -614,7 +621,9 @@ def main() -> None:
 
     try:
         tls_ids = list(traci.trafficlight.getIDList())
-        edge_ids = [edge_id for edge_id in traci.edge.getIDList() if not edge_id.startswith(":")]
+        edge_ids = filter_vehicle_edge_ids(
+            [edge_id for edge_id in traci.edge.getIDList() if not edge_id.startswith(":")]
+        )
         print(f"Available traffic lights: {tls_ids}")
 
         context = build_controller_context(tls_ids)

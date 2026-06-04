@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1124" viewBox="0 0 1280 1124">
+<rect width="100%" height="100%" fill="#fff"/>
+<text x="40" y="44" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" fill="#222">Realmap1 Selected methods vs baselines</text>
+<text x="40" y="70" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#555">Horizontal bar view, 24-episode incident-recovery evaluation. Row order: Checkerboard, Random zero, 4x4 grid transfer, Greedy, Max pressure, Fixed time.</text>
+<text x="40" y="86" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#222">Success rate (higher is better)</text>
+<line x1="230.0" y1="100" x2="230.0" y2="304" stroke="#e6e6e6"/>
+<text x="230.0" y="322" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">0.00</text>
+<line x1="475.0" y1="100" x2="475.0" y2="304" stroke="#e6e6e6"/>
+<text x="475.0" y="322" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">0.25</text>
+<line x1="720.0" y1="100" x2="720.0" y2="304" stroke="#e6e6e6"/>
+<text x="720.0" y="322" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">0.50</text>
+<line x1="965.0" y1="100" x2="965.0" y2="304" stroke="#e6e6e6"/>
+<text x="965.0" y="322" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">0.75</text>
+<line x1="1210.0" y1="100" x2="1210.0" y2="304" stroke="#e6e6e6"/>
+<text x="1210.0" y="322" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">1.00</text>
+<text x="216" y="121" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Checkerboard ckpt 20</text>
+<rect x="230" y="104" width="37.8" height="24" fill="#e15759" rx="2"/>
+<text x="275.8" y="121" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">0.04</text>
+<text x="216" y="157" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Random zero</text>
+<rect x="230" y="140" width="0.0" height="24" fill="#4e79a7" rx="2"/>
+<text x="238.0" y="157" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">0.00</text>
+<text x="216" y="193" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">4x4 grid transfer</text>
+<rect x="230" y="176" width="0.0" height="24" fill="#b07aa1" rx="2"/>
+<text x="238.0" y="193" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">0.00</text>
+<text x="216" y="229" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Greedy</text>
+<rect x="230" y="212" width="75.6" height="24" fill="#59a14f" rx="2"/>
+<text x="313.6" y="229" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">0.08</text>
+<text x="216" y="265" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Max pressure</text>
+<rect x="230" y="248" width="113.4" height="24" fill="#76b7b2" rx="2"/>
+<text x="351.4" y="265" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">0.12</text>
+<text x="397.4" y="265" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">best</text>
+<text x="216" y="301" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Fixed time</text>
+<rect x="230" y="284" width="0.0" height="24" fill="#9c9c9c" rx="2"/>
+<text x="238.0" y="301" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">0.00</text>
+<text x="40" y="342" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#222">Mean TTR, success only (lower is better)</text>
+<line x1="230.0" y1="356" x2="230.0" y2="560" stroke="#e6e6e6"/>
+<text x="230.0" y="578" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">0.0</text>
+<line x1="475.0" y1="356" x2="475.0" y2="560" stroke="#e6e6e6"/>
+<text x="475.0" y="578" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">93.8</text>
+<line x1="720.0" y1="356" x2="720.0" y2="560" stroke="#e6e6e6"/>
+<text x="720.0" y="578" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">187.5</text>
+<line x1="965.0" y1="356" x2="965.0" y2="560" stroke="#e6e6e6"/>
+<text x="965.0" y="578" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">281.2</text>
+<line x1="1210.0" y1="356" x2="1210.0" y2="560" stroke="#e6e6e6"/>
+<text x="1210.0" y="578" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">375.0</text>
+<text x="216" y="377" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Checkerboard ckpt 20</text>
+<rect x="230" y="360" width="513.0" height="24" fill="#e15759" rx="2"/>
+<text x="751.0" y="377" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">212.0</text>
+<text x="797.0" y="377" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">best</text>
+<text x="216" y="413" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Random zero</text>
+<text x="238" y="413" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#777">n/a</text>
+<text x="216" y="449" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">4x4 grid transfer</text>
+<text x="238" y="449" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#777">n/a</text>
+<text x="216" y="485" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Greedy</text>
+<rect x="230" y="468" width="907.4" height="24" fill="#59a14f" rx="2"/>
+<text x="1145.4" y="485" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">375.0</text>
+<text x="216" y="521" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Max pressure</text>
+<rect x="230" y="504" width="794.5" height="24" fill="#76b7b2" rx="2"/>
+<text x="1032.5" y="521" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">328.3</text>
+<text x="216" y="557" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Fixed time</text>
+<text x="238" y="557" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#777">n/a</text>
+<text x="40" y="598" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#222">Mean queue excess area (lower is better)</text>
+<line x1="230.0" y1="612" x2="230.0" y2="816" stroke="#e6e6e6"/>
+<text x="230.0" y="834" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">0.0</text>
+<line x1="475.0" y1="612" x2="475.0" y2="816" stroke="#e6e6e6"/>
+<text x="475.0" y="834" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">1479</text>
+<line x1="720.0" y1="612" x2="720.0" y2="816" stroke="#e6e6e6"/>
+<text x="720.0" y="834" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">2957</text>
+<line x1="965.0" y1="612" x2="965.0" y2="816" stroke="#e6e6e6"/>
+<text x="965.0" y="834" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">4436</text>
+<line x1="1210.0" y1="612" x2="1210.0" y2="816" stroke="#e6e6e6"/>
+<text x="1210.0" y="834" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">5914</text>
+<text x="216" y="633" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Checkerboard ckpt 20</text>
+<rect x="230" y="616" width="888.5" height="24" fill="#e15759" rx="2"/>
+<text x="1126.5" y="633" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">5791</text>
+<text x="216" y="669" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Random zero</text>
+<rect x="230" y="652" width="883.6" height="24" fill="#4e79a7" rx="2"/>
+<text x="1121.6" y="669" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">5760</text>
+<text x="216" y="705" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">4x4 grid transfer</text>
+<rect x="230" y="688" width="882.0" height="24" fill="#b07aa1" rx="2"/>
+<text x="1120.0" y="705" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">5749</text>
+<text x="216" y="741" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Greedy</text>
+<rect x="230" y="724" width="537.4" height="24" fill="#59a14f" rx="2"/>
+<text x="775.4" y="741" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">3503</text>
+<text x="821.4" y="741" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">best</text>
+<text x="216" y="777" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Max pressure</text>
+<rect x="230" y="760" width="544.9" height="24" fill="#76b7b2" rx="2"/>
+<text x="782.9" y="777" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">3551</text>
+<text x="216" y="813" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Fixed time</text>
+<rect x="230" y="796" width="907.4" height="24" fill="#9c9c9c" rx="2"/>
+<text x="1145.4" y="813" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">5914</text>
+<text x="40" y="854" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#222">Mean throughput recovery (higher is better)</text>
+<line x1="230.0" y1="868" x2="230.0" y2="1072" stroke="#e6e6e6"/>
+<text x="230.0" y="1090" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">0.00</text>
+<line x1="475.0" y1="868" x2="475.0" y2="1072" stroke="#e6e6e6"/>
+<text x="475.0" y="1090" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">0.75</text>
+<line x1="720.0" y1="868" x2="720.0" y2="1072" stroke="#e6e6e6"/>
+<text x="720.0" y="1090" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">1.50</text>
+<line x1="965.0" y1="868" x2="965.0" y2="1072" stroke="#e6e6e6"/>
+<text x="965.0" y="1090" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">2.25</text>
+<line x1="1210.0" y1="868" x2="1210.0" y2="1072" stroke="#e6e6e6"/>
+<text x="1210.0" y="1090" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">3.00</text>
+<text x="216" y="889" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Checkerboard ckpt 20</text>
+<rect x="230" y="872" width="745.5" height="24" fill="#e15759" rx="2"/>
+<text x="983.5" y="889" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">2.47</text>
+<text x="216" y="925" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Random zero</text>
+<rect x="230" y="908" width="771.7" height="24" fill="#4e79a7" rx="2"/>
+<text x="1009.7" y="925" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">2.56</text>
+<text x="216" y="961" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">4x4 grid transfer</text>
+<rect x="230" y="944" width="767.2" height="24" fill="#b07aa1" rx="2"/>
+<text x="1005.2" y="961" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">2.54</text>
+<text x="216" y="997" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Greedy</text>
+<rect x="230" y="980" width="898.7" height="24" fill="#59a14f" rx="2"/>
+<text x="1136.7" y="997" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">2.98</text>
+<text x="216" y="1033" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Max pressure</text>
+<rect x="230" y="1016" width="907.4" height="24" fill="#76b7b2" rx="2"/>
+<text x="1145.4" y="1033" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">3.00</text>
+<text x="1191.4" y="1033" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="#666">best</text>
+<text x="216" y="1069" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#333">Fixed time</text>
+<rect x="230" y="1052" width="861.1" height="24" fill="#9c9c9c" rx="2"/>
+<text x="1099.1" y="1069" text-anchor="start" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#222">2.85</text>
+</svg>

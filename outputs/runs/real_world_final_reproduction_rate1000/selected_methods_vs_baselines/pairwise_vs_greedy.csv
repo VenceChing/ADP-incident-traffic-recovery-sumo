@@ -1,0 +1,6 @@
+method_id,label,paired_episodes,candidate_successes,greedy_successes,candidate_only_successes,greedy_only_successes,both_success_ttr_pairs,mean_queue_excess_minus_greedy,median_queue_excess_minus_greedy,queue_excess_wins,queue_excess_losses,mean_ttr_minus_greedy_both_success,median_ttr_minus_greedy_both_success
+checkerboard_ckpt_20,Checkerboard ckpt 20,24,1,2,1,2,0,2288.495445833333,2661.0961000000007,2,22,,
+random_zero,Random zero,24,0,2,0,2,0,2256.6704791666666,2576.4206999999997,2,22,,
+grid4x4_transfer,4x4 grid transfer,24,0,2,0,2,0,2245.735329166667,2527.89675,2,22,,
+max_pressure,Max pressure,24,3,2,2,1,1,48.56887916666667,29.43215000000032,11,13,-90.0,-90.0
+fixed_time,Fixed time,24,0,2,0,2,0,2411.5754166666666,2596.7375,0,24,,

@@ -1,0 +1,7 @@
+method_id,label,group,controller,episodes,success_rate,gridlock_rate,mean_ttr_success_only,mean_queue_excess_area,mean_throughput_recovery,source
+checkerboard_ckpt_20,Checkerboard ckpt 20,Selected,adp_eval,24,0.75,0.0,243.72222222222223,4631.71815,2.055984958333333,outputs\runs\real_world2_final_reproduction_rate1000\checkerboard_ckpt20_eval24\eval_summary.csv
+random_zero,Random zero,Selected,adp_eval,24,0.4166666666666667,0.0,274.6,5189.0522,2.828057,outputs\runs\real_world2_final_reproduction_rate1000\random_zero_eval24\eval_summary.csv
+grid4x4_transfer,4x4 grid transfer,Transfer,adp_eval,24,0.4166666666666667,0.0,219.7,5936.570808333333,2.475317,outputs\runs\real_world2_final_reproduction_rate1000\grid4x4_transfer_eval24\eval_summary.csv
+greedy,Greedy,Baseline,greedy,24,0.041666666666666664,0.0,211.0,7930.502408333334,2.1472362916666667,outputs\runs\real_world2_final_reproduction_rate1000\greedy_eval24\eval_summary.csv
+max_pressure,Max pressure,Baseline,max_pressure,24,0.041666666666666664,0.0,211.0,8226.285508333332,2.1357560416666668,outputs\runs\real_world2_final_reproduction_rate1000\max_pressure_eval24\eval_summary.csv
+fixed_time,Fixed time,Baseline,fixed_time_rr,24,0.0,0.0,,7812.130229166667,3.4309035,outputs\runs\real_world2_final_reproduction_rate1000\fixed_time_eval24\eval_summary.csv

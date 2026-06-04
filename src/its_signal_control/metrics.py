@@ -67,6 +67,22 @@ def load_agent_weights(agents: dict[str, ADPAgent]) -> None:
         weights_data = json.load(handle)
     print(f"Loaded ADP weights from {source_path}.")
     agent_payloads = weights_data.get("agents", weights_data) if isinstance(weights_data, dict) else {}
+    reusable_payloads = list(agent_payloads.values()) if isinstance(agent_payloads, dict) else []
+
+    def transfer_weights(payload: Any, expected_dim: int) -> list[float] | None:
+        weights = payload.get("weights", []) if isinstance(payload, dict) else payload
+        if not isinstance(weights, list) or not all(isinstance(weight, (int, float)) for weight in weights):
+            return None
+        if WEIGHT_TRANSFER_MODE == "feature_dim_exact":
+            return sanitize_weights(weights, expected_dim)
+        if WEIGHT_TRANSFER_MODE == "feature_dim_pad_truncate":
+            adjusted = [float(weight) for weight in weights[:expected_dim]]
+            if len(adjusted) < expected_dim:
+                adjusted.extend([0.0] * (expected_dim - len(adjusted)))
+            return adjusted if all(math.isfinite(weight) for weight in adjusted) else None
+        return sanitize_weights(weights, expected_dim)
+
+    transferred_agents = 0
     for agent_id, payload in agent_payloads.items():
         if agent_id not in agents:
             continue
@@ -78,6 +94,23 @@ def load_agent_weights(agents: dict[str, ADPAgent]) -> None:
         agents[agent_id].weights = sanitized_weights
         if isinstance(payload, dict):
             agents[agent_id].import_transition_model(payload.get("transition_model", {}))
+    if WEIGHT_TRANSFER_MODE in {"feature_dim_exact", "feature_dim_pad_truncate"}:
+        for agent_id, agent in agents.items():
+            if any(math.isfinite(weight) and abs(weight) > 1.0e-12 for weight in agent.weights):
+                continue
+            for payload in reusable_payloads:
+                transferred = transfer_weights(payload, agent.feature_dim)
+                if transferred is None:
+                    continue
+                agent.weights = transferred
+                if isinstance(payload, dict) and WEIGHT_TRANSFER_MODE == "feature_dim_exact":
+                    agent.import_transition_model(payload.get("transition_model", {}))
+                transferred_agents += 1
+                break
+        print(
+            f"Weight transfer mode {WEIGHT_TRANSFER_MODE}: "
+            f"assigned transferred weights to {transferred_agents}/{len(agents)} agents."
+        )
 
 
 def save_agent_weights(agents: dict[str, ADPAgent], path: str | None = None) -> None:
