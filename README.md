@@ -177,7 +177,7 @@ outputs/runs/selected_methods_vs_baselines/
 
 Use these commands when you want to screen-record one real map at a time in VSCode Terminal. Each command opens two visible PowerShell/SUMO GUI demo windows: one for ADP and one for the fixed-time baseline.
 
-The GUI demos intentionally use denser demo-only traffic (`RATE: 2500`, `TIME: 880`, incident at step `250`) so the vehicles and controller differences are visible on screen. This does not change the final reported evaluation runs, which remain under the `real_world*_final_reproduction_rate1000` output folders.
+The GUI demos intentionally use denser demo-only traffic (`RATE: 2500`, `TIME: 1180`, incident at step `150`) so the vehicles and controller differences are visible on screen. This does not change the final reported evaluation runs, which remain under the `real_world*_final_reproduction_rate1000` output folders.
 
 If your VSCode terminal is currently at:
 

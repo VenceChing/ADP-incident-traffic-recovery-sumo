@@ -208,7 +208,7 @@ Under the realmap1 scenario, max-pressure and greedy baselines outperformed the 
 
 Use these commands to open two visible SUMO GUI demo windows for one map at a time. Each command compares ADP against the fixed-time baseline, which is useful for screen recording.
 
-The GUI demos intentionally use denser demo-only traffic (`RATE: 2500`, `TIME: 880`, incident at step `250`) so the vehicles and controller differences are visible on screen. This does not change the final reported evaluation outputs.
+The GUI demos intentionally use denser demo-only traffic (`RATE: 2500`, `TIME: 1180`, incident at step `150`) so the vehicles and controller differences are visible on screen. This does not change the final reported evaluation outputs.
 
 If your VSCode terminal is currently at:
 
