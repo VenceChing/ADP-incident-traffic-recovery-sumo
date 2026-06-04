@@ -41,5 +41,4 @@ scenarios/**/outputs/
 scenarios/**/trips.trips.xml
 scenarios/**/route_tmp/
 scenarios/real_world/map_rate1000.rou.xml
-scenarios/real_world/map_rate2500.rou.xml
 scenarios/real_world/map_rate6000.rou.xml
