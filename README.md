@@ -173,6 +173,45 @@ After running all five eval commands, the final report chart can be regenerated 
 outputs/runs/selected_methods_vs_baselines/
 ```
 
+## Real Map GUI Demo Recording
+
+Use these commands when you want to screen-record one real map at a time in VSCode Terminal. Each command opens two visible PowerShell/SUMO GUI demo windows: one for ADP and one for the fixed-time baseline.
+
+If your VSCode terminal is currently at:
+
+```powershell
+C:\ai\final_project\final_version
+```
+
+run these commands directly.
+
+Realmap1, ADP vs fixed-time:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ADP-incident-traffic-recovery-sumo\scripts\launch_real_map_demo_compare.ps1 -Map real_world
+```
+
+Realmap2, ADP vs fixed-time:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ADP-incident-traffic-recovery-sumo\scripts\launch_real_map_demo_compare.ps1 -Map real_world2
+```
+
+If your VSCode terminal is already at the project root:
+
+```powershell
+C:\ai\final_project\final_version\ADP-incident-traffic-recovery-sumo
+```
+
+you can use the shorter commands:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\launch_real_map_demo_compare.ps1 -Map real_world
+powershell -ExecutionPolicy Bypass -File scripts\launch_real_map_demo_compare.ps1 -Map real_world2
+```
+
+The launcher requires `SUMO_HOME` to be set. The opened window titles identify the map and method, for example `realmap1 ADP` and `realmap1 fixed_time_rr`.
+
 ## Reproduce Checkerboard Training
 
 Train 50 episodes and save checkpoints every 10 episodes:

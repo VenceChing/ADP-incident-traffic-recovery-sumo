@@ -203,3 +203,43 @@ Recommended short conclusion:
 ```text
 Under the realmap1 scenario, max-pressure and greedy baselines outperformed the trained ADP checkpoint, indicating that the learned policy did not transfer cleanly to that topology and incident distribution. Under realmap2, the trained ADP checkpoint achieved the highest success rate and lowest queue excess area, clearly outperforming the three baselines. The 4x4-grid transferred weights showed limited generalization: no successful recovery on realmap1, but partial recovery performance on realmap2.
 ```
+
+## GUI Demo Recording Commands
+
+Use these commands to open two visible SUMO GUI demo windows for one map at a time. Each command compares ADP against the fixed-time baseline, which is useful for screen recording.
+
+If your VSCode terminal is currently at:
+
+```powershell
+C:\ai\final_project\final_version
+```
+
+run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ADP-incident-traffic-recovery-sumo\scripts\launch_real_map_demo_compare.ps1 -Map real_world
+```
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ADP-incident-traffic-recovery-sumo\scripts\launch_real_map_demo_compare.ps1 -Map real_world2
+```
+
+If your VSCode terminal is already at the project root:
+
+```powershell
+C:\ai\final_project\final_version\ADP-incident-traffic-recovery-sumo
+```
+
+run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\launch_real_map_demo_compare.ps1 -Map real_world
+powershell -ExecutionPolicy Bypass -File scripts\launch_real_map_demo_compare.ps1 -Map real_world2
+```
+
+Each command opens two windows:
+
+- ADP demo
+- `fixed_time_rr` demo
+
+`SUMO_HOME` must be set before launching the demos.
