@@ -1,9 +1,10 @@
-# Real-World Scenario Intake
+# Real-World Scenario
 
-Place raw `.osm` files and generated SUMO network files for real-world experiments here. Use:
+`map.net.xml` is the active real-world SUMO network.
 
-```bash
-python scripts/ingest_osm.py path/to/map.osm scenarios/real_world/network.net.xml
-```
+- Training route: `map_rate1000.rou.xml`
+- Demo route: `map_rate4500.rou.xml`
+- 20-episode training preset: `configs/final_real_world_train_checkerboard_neighbor_adp_20.yaml`
+- Trained checkpoint: `outputs/runs/real_world_new_map/checkerboard_train_20/checkpoints/episode_0020.json`
 
-Generated route files and evaluation outputs should stay under `outputs/`, not in this scenario folder.
+Routes are checked against the active network at startup and regenerated when they reference removed edges.

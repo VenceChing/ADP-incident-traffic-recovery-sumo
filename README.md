@@ -173,11 +173,11 @@ After running all five eval commands, the final report chart can be regenerated 
 outputs/runs/selected_methods_vs_baselines/
 ```
 
-## Real Map GUI Demo Recording
+## GUI Demo Comparison
 
-Use these commands when you want to screen-record one real map at a time in VSCode Terminal. Each command opens two visible PowerShell/SUMO GUI demo windows: one for ADP and one for the fixed-time baseline.
+Use these commands when you want to compare one map at a time. Each command opens two visible PowerShell/SUMO GUI demo windows: one for ADP and one for the fixed-time baseline.
 
-The GUI demos intentionally use denser demo-only traffic (`RATE: 2500`, `TIME: 1180`, incident at step `150`) so the vehicles and controller differences are visible on screen. This does not change the final reported evaluation runs, which remain under the `real_world*_final_reproduction_rate1000` output folders.
+All comparison demos use the SUMO `real world` visualization scheme with a `0 ms` step delay, `TIME: 4000`, and an incident at step `400`. The `real_world` comparison uses `RATE: 4500`. The launcher automatically places ADP on the left half of the primary screen and Fixed-time on the right half. Each SUMO window keeps a single internal `View #0`; the outer SUMO window titles identify the method as `ADP` or `Fixed-time`. Demo runs record the first success time but continue simulating until `TIME`. These demo settings do not change the final reported evaluation runs.
 
 If your VSCode terminal is currently at:
 
@@ -187,13 +187,19 @@ C:\ai\final_project\final_version
 
 run these commands directly.
 
-Realmap1, ADP vs fixed-time:
+Grid 4x4 3-lane, ADP vs fixed-time:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ADP-incident-traffic-recovery-sumo\scripts\launch_real_map_demo_compare.ps1 -Map grid_4x4_3lane
+```
+
+Real-world map 1, ADP vs fixed-time:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ADP-incident-traffic-recovery-sumo\scripts\launch_real_map_demo_compare.ps1 -Map real_world
 ```
 
-Realmap2, ADP vs fixed-time:
+Real-world map 2, ADP vs fixed-time:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\ADP-incident-traffic-recovery-sumo\scripts\launch_real_map_demo_compare.ps1 -Map real_world2
@@ -208,11 +214,13 @@ C:\ai\final_project\final_version\ADP-incident-traffic-recovery-sumo
 you can use the shorter commands:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts\launch_real_map_demo_compare.ps1
+powershell -ExecutionPolicy Bypass -File scripts\launch_real_map_demo_compare.ps1 -Map grid_4x4_3lane
 powershell -ExecutionPolicy Bypass -File scripts\launch_real_map_demo_compare.ps1 -Map real_world
 powershell -ExecutionPolicy Bypass -File scripts\launch_real_map_demo_compare.ps1 -Map real_world2
 ```
 
-The launcher requires `SUMO_HOME` to be set. The opened window titles identify the map and method, for example `realmap1 ADP` and `realmap1 fixed_time_rr`.
+The command without `-Map` defaults to `grid_4x4_3lane`. Use `-Map all` to launch all three map comparisons. The launcher requires `SUMO_HOME` to be set.
 
 ## Reproduce Checkerboard Training
 

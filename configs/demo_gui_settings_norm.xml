@@ -1,0 +1,6 @@
+<viewsettings>
+    <scheme name="real world">
+        <vehicles vehicleMode="8" vehicleQuality="2" vehicle_minSize="2.00" vehicle_exaggeration="1.00" vehicle_constantSize="1"/>
+    </scheme>
+    <delay value="80"/>
+</viewsettings>

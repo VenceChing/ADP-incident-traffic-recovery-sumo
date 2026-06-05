@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 DIRECTION_TO_INDEX = {"N": 0, "E": 1, "S": 2, "W": 3}
 INDEX_TO_DIRECTION = ["N", "E", "S", "W"]
-LEFT_TURN_DIRS = {"l", "t"}
-RIGHT_TURN_DIRS = {"r"}
+LEFT_TURN_DIRS = {"l", "L", "t"}
+RIGHT_TURN_DIRS = {"r", "R"}
 
 
 @dataclass(frozen=True)

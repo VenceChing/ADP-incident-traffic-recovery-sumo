@@ -1,0 +1,11 @@
+<configuration>
+  <input>
+    <net-file value="map2_3lane_norm.net.xml"/>
+    <route-files value="map2_3lane_norm_demo_rate3600.rou.xml"/>
+  </input>
+  <time>
+    <begin value="0"/>
+    <end value="4000"/>
+    <step-length value="1.0"/>
+  </time>
+</configuration>

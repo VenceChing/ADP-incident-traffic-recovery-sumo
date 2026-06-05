@@ -1,25 +1,25 @@
-RATE: 2500
-ROUTE_FILE_PREFIX: "map2"
-ROUTE_FILE: "map2_rate2500.rou.xml"
-SCENARIO_DIR: "scenarios/real_world2"
-SUMO_CONFIG: "map2.sumocfg"
-NETWORK_FILE: "map2.net.xml"
+RATE: 6000
+ROUTE_FILE_PREFIX: "grid_4x4_3lane"
+SCENARIO_DIR: "scenarios/grid_4x4_3lane"
+SUMO_CONFIG: "sim.sumocfg"
+NETWORK_FILE: "grid_4x4_3lane.net.xml"
 ACTION_SPACE: "three_lane_8"
 USE_GUI: true
 GUI_SETTINGS_FILE: "configs/demo_gui_settings.xml"
 GUI_DELAY_MS: 0
-GUI_WINDOW_TITLE: "real_world2 | Fixed-time"
+GUI_WINDOW_TITLE: "grid_4x4_3lane | Fixed-time"
 RENDER_STRESS: true
+REGENERATE_ROUTES: false
 RUN_SINGLE_DEMO: true
 CONTINUE_DEMO_AFTER_SUCCESS: true
 RUN_TRAINING: false
 RUN_EVALUATION: false
 LOAD_WEIGHTS_FOR_EVALUATION: false
-RESULTS_DIR: "C:/ai/final_project/final_version/ADP-incident-traffic-recovery-sumo/outputs/runs/demo_real_world2_fixed_time"
+RESULTS_DIR: "../../outputs/runs/demo_grid_4x4_3lane_fixed_time"
 RANDOM_SEED: 7
 DEMO_SEED: 20007
 DEMO_CONTROLLER: "fixed_time_rr"
-DEMO_INCIDENT_EDGES: []
+DEMO_INCIDENT_EDGES: ["A1B1", "B1A1"]
 TIME: 4000
 INCIDENT_TIME: 400
 BASELINE_WARMUP_TIME: 60.0
@@ -27,4 +27,4 @@ DECISION_INTERVAL: 10
 TAU: 1.1
 DECISION_ORDER_STRATEGY: "unified"
 ALLOW_NEIGHBOR_INFO: false
-ADP_VARIANT_LABEL: "demo_real_world2_fixed_time"
+ADP_VARIANT_LABEL: "demo_grid_4x4_3lane_fixed_time"

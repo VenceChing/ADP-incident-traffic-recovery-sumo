@@ -53,6 +53,7 @@ from .traffic_model import (
     get_switch_penalty,
     get_train_epsilon,
     reset_episode_detector,
+    set_sumo_window_title,
     set_active_route_file,
     split_incidents,
 )
@@ -60,6 +61,7 @@ from .utils import cleanup_route_temp_files
 from .utils import generate_routes
 from .utils import get_route_horizon
 from .utils import route_file_covers_time
+from .utils import route_file_matches_network
 
 
 def get_controller_decision_interval(controller: str) -> int:
@@ -117,6 +119,7 @@ def run_episode(
 ) -> dict[str, Any]:
     random.seed(seed)
     traci.load(build_sumo_args(seed))
+    set_sumo_window_title()
     env.incident_triggered = False
     env._incident_edges = set()
     env._incident_lanes_closed = False
@@ -172,6 +175,7 @@ def run_episode(
     final_recent_arrival_rate = 0.0
     final_baseline_halting_ratio = 0.0
     final_success_halting_ratio_threshold = 0.0
+    success_time: float | None = None
 
     python_current_phases = {agent_id: 0 for agent_id in agents.keys()}
     episode_start_l1_norms = get_agent_weight_l1_norms(agents)
@@ -196,7 +200,8 @@ def run_episode(
     while traci.simulation.getMinExpectedNumber() > 0 and not episode_ended:
         sim_time = traci.simulation.getTime()
         if sim_time >= SIM_END_TIME:
-            final_status = "TIMEOUT"
+            if success_time is None:
+                final_status = "TIMEOUT"
             break
 
         step_cache: dict[str, dict[str, Any]] = {}
@@ -438,7 +443,16 @@ def run_episode(
                     recent_halting_ratio=final_recent_halting_ratio,
                     current_halting_ratio=halting_ratio,
                 )
-                if status in {"GRIDLOCK", "SUCCESS"}:
+                if status == "SUCCESS" and success_time is None:
+                    success_time = sim_time
+                    final_status = "SUCCESS"
+                    if phase == "demo" and CONTINUE_DEMO_AFTER_SUCCESS:
+                        print(f"Demo success reached at time={sim_time:.1f}; continuing until TIME={TIME}.")
+
+                should_stop_for_success = status == "SUCCESS" and not (
+                    phase == "demo" and CONTINUE_DEMO_AFTER_SUCCESS
+                )
+                if status == "GRIDLOCK" or should_stop_for_success:
                     final_status = status
                     if train_adp and adp_control and learning_active:
                         neighbor_info = {
@@ -466,7 +480,8 @@ def run_episode(
                     break
 
                 if sim_time >= SIM_END_TIME:
-                    final_status = "TIMEOUT"
+                    if success_time is None:
+                        final_status = "TIMEOUT"
                     episode_ended = True
                     break
 
@@ -530,6 +545,11 @@ def run_episode(
         else 0.0
     )
     duration_after_incident = max(0.0, sim_time - INCIDENT_TIME)
+    time_to_recovery = (
+        max(0.0, success_time - INCIDENT_TIME)
+        if success_time is not None
+        else None
+    )
     throughput_recovery_ratio = (
         final_recent_arrival_rate / final_baseline_arrival_rate
         if final_baseline_arrival_rate >= MIN_BASELINE_ARRIVAL_RATE
@@ -551,7 +571,7 @@ def run_episode(
         "incident_direction": incident_direction_summary,
         "end_time": f"{sim_time:.1f}",
         "duration_after_incident": f"{duration_after_incident:.1f}",
-        "ttr": f"{duration_after_incident:.1f}" if final_status == "SUCCESS" else "",
+        "ttr": f"{time_to_recovery:.1f}" if time_to_recovery is not None else "",
         "avg_pre_total_queue": f"{pre_total_queue_sum / max(1, pre_total_queue_count):.4f}",
         "avg_post_total_queue": f"{post_total_queue_sum / max(1, post_total_queue_count):.4f}",
         "max_post_total_queue": f"{max_post_total_queue:.4f}",
@@ -605,19 +625,28 @@ def main() -> None:
     active_route_file = ROUTE_FILE
     route_missing = not os.path.exists(ROUTE_FILE)
     route_too_short = (not route_missing) and not route_file_covers_time(ROUTE_FILE, TIME)
+    route_incompatible = (not route_missing) and not route_file_matches_network(
+        ROUTE_FILE, NETWORK_FILE
+    )
     if route_too_short:
         horizon = get_route_horizon(ROUTE_FILE)
         print(
             f"Route file {ROUTE_FILE} ends at depart={horizon}; "
             f"regenerating for configured TIME={TIME}."
         )
-    if REGENERATE_ROUTES or route_missing or route_too_short:
+    if route_incompatible:
+        print(
+            f"Route file {ROUTE_FILE} references edges not present in {NETWORK_FILE}; "
+            "regenerating routes for the current network."
+        )
+    if REGENERATE_ROUTES or route_missing or route_too_short or route_incompatible:
         active_route_file = generate_routes(insertion_rate=RATE, generate_time=TIME, route_file=ROUTE_FILE)
     set_active_route_file(active_route_file)
     print(f"Using route file: {active_route_file}")
 
     env = SumoEnv(use_gui=USE_GUI, step_length=STEP_LENGTH)
     traci.start(build_sumo_cmd(RANDOM_SEED))
+    set_sumo_window_title()
 
     try:
         tls_ids = list(traci.trafficlight.getIDList())
@@ -765,7 +794,9 @@ def main() -> None:
 
     finally:
         try:
-            traci.close(False)
+            # Wait for SUMO to acknowledge CMD_CLOSE so the GUI does not report
+            # a normal controller shutdown as "Socket reset by peer".
+            traci.close()
         except traci.TraCIException:
             pass
         if active_route_file != ROUTE_FILE:

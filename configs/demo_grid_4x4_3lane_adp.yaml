@@ -1,26 +1,26 @@
-RATE: 4500
-ROUTE_FILE_PREFIX: "map"
-ROUTE_FILE: "map_rate4500.rou.xml"
-SCENARIO_DIR: "scenarios/real_world"
-SUMO_CONFIG: "map.sumocfg"
-NETWORK_FILE: "map.net.xml"
+RATE: 6000
+ROUTE_FILE_PREFIX: "grid_4x4_3lane"
+SCENARIO_DIR: "scenarios/grid_4x4_3lane"
+SUMO_CONFIG: "sim.sumocfg"
+NETWORK_FILE: "grid_4x4_3lane.net.xml"
 ACTION_SPACE: "three_lane_8"
 USE_GUI: true
 GUI_SETTINGS_FILE: "configs/demo_gui_settings.xml"
 GUI_DELAY_MS: 0
-GUI_WINDOW_TITLE: "real_world | ADP"
+GUI_WINDOW_TITLE: "grid_4x4_3lane | ADP"
 RENDER_STRESS: true
+REGENERATE_ROUTES: false
 RUN_SINGLE_DEMO: true
 CONTINUE_DEMO_AFTER_SUCCESS: true
 RUN_TRAINING: false
 RUN_EVALUATION: false
 LOAD_WEIGHTS_FOR_EVALUATION: true
-WEIGHTS_PATH: "../../outputs/runs/real_world_new_map/checkerboard_train_20/checkpoints/episode_0020.json"
-RESULTS_DIR: "../../outputs/runs/real_world_new_map/demo_adp"
+WEIGHTS_PATH: "../../models/main_methods/checkerboard_neighbor_adp_checkpoint_0020.json"
+RESULTS_DIR: "../../outputs/runs/demo_grid_4x4_3lane_adp"
 RANDOM_SEED: 7
 DEMO_SEED: 20007
 DEMO_CONTROLLER: "adp_eval"
-DEMO_INCIDENT_EDGES: []
+DEMO_INCIDENT_EDGES: ["A1B1", "B1A1"]
 TIME: 4000
 INCIDENT_TIME: 400
 BASELINE_WARMUP_TIME: 60.0
@@ -35,4 +35,4 @@ ADP_LANE_FAIRNESS_WEIGHT: 0.10
 ADP_LANE_FAIRNESS_MARGIN: 5.0
 DECISION_ORDER_STRATEGY: "checkerboard"
 ALLOW_NEIGHBOR_INFO: true
-ADP_VARIANT_LABEL: "demo_real_world_adp"
+ADP_VARIANT_LABEL: "demo_grid_4x4_3lane_adp"

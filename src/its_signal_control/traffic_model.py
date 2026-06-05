@@ -1,5 +1,7 @@
 import math
+import os
 import random
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -7,6 +9,7 @@ from typing import Any
 import traci
 
 from .agent import ADPAgent
+from .approaches import assign_cardinal_approaches
 from .actions import (
     DIRECTION_TO_INDEX,
     action_matches,
@@ -149,7 +152,8 @@ def get_edge_endpoints(edge_id: str) -> tuple[str, str] | None:
 
 def build_incident_candidates(edge_ids: list[str], tls_ids: list[str]) -> list[list[str]]:
     tls_set = set(tls_ids)
-    passenger_edges = _load_network_topology()["passenger_edges"]
+    topology = _load_network_topology()
+    passenger_edges = topology["passenger_edges"]
     edge_set = set(edge_ids) & (passenger_edges or set(edge_ids))
     candidates = []
     seen_segments = set()
@@ -163,7 +167,8 @@ def build_incident_candidates(edge_ids: list[str], tls_ids: list[str]) -> list[l
         endpoint_to_edges.setdefault((from_node, to_node), []).append(edge_id)
 
     if endpoint_to_edges:
-        paired_candidates = []
+        paired_internal_candidates = []
+        paired_boundary_candidates = []
         unpaired_candidates = []
         for (from_node, to_node), edges in sorted(endpoint_to_edges.items()):
             reverse_edges = endpoint_to_edges.get((to_node, from_node), [])
@@ -173,12 +178,17 @@ def build_incident_candidates(edge_ids: list[str], tls_ids: list[str]) -> list[l
             seen_segments.add(segment_key)
             if reverse_edges:
                 candidate = sorted([sorted(edges)[0], sorted(reverse_edges)[0]])
-                paired_candidates.append(candidate)
+                if from_node in tls_set and to_node in tls_set:
+                    paired_internal_candidates.append(candidate)
+                else:
+                    paired_boundary_candidates.append(candidate)
             elif from_node in tls_set or to_node in tls_set:
                 unpaired_candidates.append([sorted(edges)[0]])
 
-        if paired_candidates:
-            return paired_candidates
+        if paired_internal_candidates:
+            return paired_internal_candidates
+        if paired_boundary_candidates:
+            return paired_boundary_candidates
         if unpaired_candidates:
             return unpaired_candidates
 
@@ -480,6 +490,18 @@ def build_sumo_args(seed: int) -> list[str]:
         "--no-warnings",
         "--no-step-log",
     ]
+    if USE_GUI:
+        if GUI_SETTINGS_FILE:
+            gui_settings_path = GUI_SETTINGS_FILE
+            if not os.path.isabs(gui_settings_path):
+                gui_settings_path = os.path.join(REPO_ROOT, gui_settings_path)
+            sumo_args.extend(["--gui-settings-file", str(gui_settings_path)])
+        if GUI_DELAY_MS >= 0:
+            sumo_args.extend(["--delay", str(GUI_DELAY_MS)])
+        if GUI_WINDOW_SIZE:
+            sumo_args.extend(["--window-size", GUI_WINDOW_SIZE])
+        if GUI_WINDOW_POS:
+            sumo_args.extend(["--window-pos", GUI_WINDOW_POS])
     if SIM_END_TIME is not None:
         sumo_args.extend(["--end", str(SIM_END_TIME)])
     return sumo_args
@@ -488,6 +510,45 @@ def build_sumo_args(seed: int) -> list[str]:
 def build_sumo_cmd(seed: int) -> list[str]:
     sumo_binary = "sumo-gui" if USE_GUI else "sumo"
     return [sumo_binary] + build_sumo_args(seed)
+
+
+def set_sumo_window_title() -> None:
+    if not USE_GUI or not GUI_WINDOW_TITLE or os.name != "nt":
+        return
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        process = traci.getConnection()._process
+        if process is None:
+            return
+
+        user32 = ctypes.windll.user32
+        callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+        user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        user32.IsWindowVisible.argtypes = [wintypes.HWND]
+        user32.SetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPCWSTR]
+
+        for _ in range(10):
+            renamed = False
+
+            @callback_type
+            def rename_matching_window(window_handle: int, _: int) -> bool:
+                nonlocal renamed
+                process_id = wintypes.DWORD()
+                user32.GetWindowThreadProcessId(window_handle, ctypes.byref(process_id))
+                if process_id.value == process.pid and user32.IsWindowVisible(window_handle):
+                    renamed = bool(user32.SetWindowTextW(window_handle, GUI_WINDOW_TITLE)) or renamed
+                return True
+
+            user32.EnumWindows(rename_matching_window, 0)
+            if renamed:
+                return
+            time.sleep(0.05)
+    except (AttributeError, OSError):
+        print(f"WARNING: Could not set SUMO GUI window title to {GUI_WINDOW_TITLE!r}.")
 
 
 def lane_to_dir(lane_id: str) -> str | None:
@@ -501,6 +562,23 @@ def lane_to_dir(lane_id: str) -> str | None:
     if abs(dx) >= abs(dy):
         return "W" if dx > 0 else "E"
     return "S" if dy > 0 else "N"
+
+
+def _tls_approach_map(links: list) -> dict[str, str]:
+    vectors: dict[str, tuple[float, float]] = {}
+    for link_group in links:
+        if not link_group or not link_group[0] or link_group[0][0] is None:
+            continue
+        from_lane = link_group[0][0]
+        try:
+            from_edge = traci.lane.getEdgeID(from_lane)
+            shape = traci.lane.getShape(from_lane)
+        except traci.TraCIException:
+            continue
+        if from_edge.startswith(":") or len(shape) < 2:
+            continue
+        vectors.setdefault(from_edge, (shape[0][0] - shape[-1][0], shape[0][1] - shape[-1][1]))
+    return assign_cardinal_approaches(vectors)
 
 
 def _queue_key_for_lane(lane_id: str | None, queue_key_mode: str) -> str | None:
@@ -569,6 +647,7 @@ def build_controller_context(tls_ids: list[str]) -> dict[str, Any]:
 
     for tls_id in tls_ids:
         links = traci.trafficlight.getControlledLinks(tls_id)
+        approach_map = _tls_approach_map(links)
         tls_state_len[tls_id] = len(links)
         tls_all_red[tls_id] = "r" * len(links)
         action_indices = {action: [] for action in range(len(action_definitions))}
@@ -584,14 +663,14 @@ def build_controller_context(tls_ids: list[str]) -> dict[str, Any]:
             to_lane = link_group[0][1]
             if from_lane is None:
                 continue
-            direction = lane_to_dir(from_lane)
-            if direction is None:
-                continue
-            movement_group = movement_group_for_connection(from_lane, action_space=ACTION_SPACE)
             from_key = _queue_key_for_lane(from_lane, queue_key_mode)
             to_key = _queue_key_for_lane(to_lane, queue_key_mode) if to_lane else None
             from_edge = traci.lane.getEdgeID(from_lane)
             to_edge = traci.lane.getEdgeID(to_lane) if to_lane else None
+            direction = approach_map.get(from_edge)
+            if direction is None:
+                continue
+            movement_group = movement_group_for_connection(from_lane, action_space=ACTION_SPACE)
 
             if from_key is not None:
                 lane_to_queue_key[from_lane] = from_key

@@ -34,6 +34,61 @@ def test_three_lane_training_preset_selects_three_lane_action_space() -> None:
     assert preset["TRAIN_INCIDENT_SELECTION"] == "random"
 
 
+def test_comparison_demo_presets_share_gui_and_timing_settings() -> None:
+    cases = [
+        ("configs/demo_grid_4x4_3lane_adp.yaml", "grid_4x4_3lane | ADP"),
+        ("configs/demo_grid_4x4_3lane_fixed_time.yaml", "grid_4x4_3lane | Fixed-time"),
+        ("configs/demo_real_world_adp.yaml", "real_world | ADP"),
+        ("configs/demo_real_world_fixed_time.yaml", "real_world | Fixed-time"),
+        ("configs/demo_real_world2_adp.yaml", "real_world2 | ADP"),
+        ("configs/demo_real_world2_fixed_time.yaml", "real_world2 | Fixed-time"),
+    ]
+
+    for path, expected_title in cases:
+        preset = config.load_preset(Path(path))
+        assert preset["USE_GUI"] is True
+        assert preset["GUI_SETTINGS_FILE"] == "configs/demo_gui_settings.xml"
+        assert preset["GUI_DELAY_MS"] == 0
+        assert preset["GUI_WINDOW_TITLE"] == expected_title
+        assert preset["CONTINUE_DEMO_AFTER_SUCCESS"] is True
+        assert preset["TIME"] == 4000
+        assert preset["INCIDENT_TIME"] == 400
+
+
+def test_grid_comparison_demo_presets_use_selected_three_lane_setup() -> None:
+    adp_preset = config.load_preset(Path("configs/demo_grid_4x4_3lane_adp.yaml"))
+    fixed_preset = config.load_preset(Path("configs/demo_grid_4x4_3lane_fixed_time.yaml"))
+
+    assert adp_preset["SCENARIO_DIR"] == "scenarios/grid_4x4_3lane"
+    assert adp_preset["DEMO_CONTROLLER"] == "adp_eval"
+    assert adp_preset["LOAD_WEIGHTS_FOR_EVALUATION"] is True
+    assert adp_preset["DECISION_ORDER_STRATEGY"] == "checkerboard"
+    assert fixed_preset["SCENARIO_DIR"] == "scenarios/grid_4x4_3lane"
+    assert fixed_preset["DEMO_CONTROLLER"] == "fixed_time_rr"
+    assert fixed_preset["LOAD_WEIGHTS_FOR_EVALUATION"] is False
+
+
+def test_real_world_new_map_training_preset_runs_twenty_episodes() -> None:
+    preset = config.load_preset(Path("configs/final_real_world_train_checkerboard_neighbor_adp_20.yaml"))
+
+    assert preset["SCENARIO_DIR"] == "scenarios/real_world"
+    assert preset["NETWORK_FILE"] == "map.net.xml"
+    assert preset["ROUTE_FILE"] == "map_rate1000.rou.xml"
+    assert preset["TRAIN_EPISODES"] == 20
+    assert preset["DECISION_ORDER_STRATEGY"] == "checkerboard"
+    assert preset["ALLOW_NEIGHBOR_INFO"] is True
+
+
+def test_real_world_comparison_demo_uses_rate_4500() -> None:
+    adp_preset = config.load_preset(Path("configs/demo_real_world_adp.yaml"))
+    fixed_preset = config.load_preset(Path("configs/demo_real_world_fixed_time.yaml"))
+
+    assert adp_preset["RATE"] == 4500
+    assert fixed_preset["RATE"] == 4500
+    assert adp_preset["ROUTE_FILE"] == "map_rate4500.rou.xml"
+    assert fixed_preset["ROUTE_FILE"] == "map_rate4500.rou.xml"
+
+
 def test_three_lane_incident_feature_presets_enable_v2_features() -> None:
     train_preset = config.load_preset(Path("configs/three_lane_training_50_incident_features.yaml"))
     eval_preset = config.load_preset(Path("configs/three_lane_evaluation_incident_features.yaml"))

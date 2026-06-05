@@ -37,6 +37,10 @@ def _apply_runtime_config(args: argparse.Namespace, mode: str) -> Path:
         overrides["RENDER_STRESS"] = False
     if args.gui:
         overrides["USE_GUI"] = True
+    if args.gui_window_size:
+        overrides["GUI_WINDOW_SIZE"] = args.gui_window_size
+    if args.gui_window_pos:
+        overrides["GUI_WINDOW_POS"] = args.gui_window_pos
     if args.output_dir:
         overrides["RESULTS_DIR"] = str(_repo_path(args.output_dir))
     if args.weights:
@@ -70,6 +74,8 @@ def build_parser() -> argparse.ArgumentParser:
         subparser.add_argument("--output-dir")
         subparser.add_argument("--headless", action="store_true")
         subparser.add_argument("--gui", action="store_true")
+        subparser.add_argument("--gui-window-size")
+        subparser.add_argument("--gui-window-pos")
 
     evaluate = subparsers.add_parser("evaluate", help="Evaluate controllers.")
     add_common(evaluate)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from .approaches import assign_cardinal_approaches
 from .actions import (
     LEFT_TURN_DIRS,
     RIGHT_TURN_DIRS,
@@ -28,7 +29,7 @@ def _lane_shapes(root: ET.Element) -> dict[str, str]:
     return shapes
 
 
-def _lane_to_dir(lane_id: str, lane_shapes: dict[str, str]) -> str | None:
+def _lane_vector(lane_id: str, lane_shapes: dict[str, str]) -> tuple[float, float] | None:
     shape = lane_shapes.get(lane_id)
     if not shape:
         return None
@@ -40,11 +41,21 @@ def _lane_to_dir(lane_id: str, lane_shapes: dict[str, str]) -> str | None:
         return None
     x1, y1 = points[0]
     x2, y2 = points[-1]
-    dx = x2 - x1
-    dy = y2 - y1
-    if abs(dx) >= abs(dy):
-        return "W" if dx > 0 else "E"
-    return "S" if dy > 0 else "N"
+    return x1 - x2, y1 - y2
+
+
+def _tls_approach_maps(root: ET.Element, lane_shapes: dict[str, str]) -> dict[str, dict[str, str]]:
+    tls_vectors: dict[str, dict[str, tuple[float, float]]] = {}
+    for connection in root.findall("connection"):
+        from_edge = connection.get("from", "")
+        from_lane_index = connection.get("fromLane")
+        tls_id = connection.get("tl")
+        if not tls_id or from_edge.startswith(":") or from_lane_index is None:
+            continue
+        vector = _lane_vector(f"{from_edge}_{from_lane_index}", lane_shapes)
+        if vector is not None:
+            tls_vectors.setdefault(tls_id, {}).setdefault(from_edge, vector)
+    return {tls_id: assign_cardinal_approaches(vectors) for tls_id, vectors in tls_vectors.items()}
 
 
 def _has_conflict(requests: dict[int, str], first: int, second: int) -> bool:
@@ -75,6 +86,7 @@ def validate_movement_lane_network(
     root = ET.parse(net_path).getroot()
     issues: list[str] = []
     lane_shapes = _lane_shapes(root)
+    tls_approach_maps = _tls_approach_maps(root, lane_shapes)
 
     for edge in root.findall("edge"):
         if not _normal_edge(edge):
@@ -102,7 +114,7 @@ def validate_movement_lane_network(
         if not tls_id or link_index is None:
             continue
         from_lane = f"{connection.get('from')}_{from_lane_index}"
-        approach = _lane_to_dir(from_lane, lane_shapes)
+        approach = tls_approach_maps.get(tls_id, {}).get(from_edge)
         movement = movement_group_for_connection(from_lane, turn_dir, action_space=action_space)
         tl_connections.setdefault(tls_id, []).append(
             {
